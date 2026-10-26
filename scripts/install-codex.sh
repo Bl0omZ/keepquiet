@@ -3,13 +3,13 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/install-bin.sh"
-H="${AGENT_REDACT_HOME:-$HOME/.agent-redact}"
+H="${KEEPQUIET_HOME:-$HOME/.keepquiet}"
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
 mkdir -p "$CODEX_DIR"
-OUT="$(sed "s#__AGENT_REDACT_BIN__#$H/bin/agent-redact#g" "$ROOT/plugins/codex/hooks.json.tmpl")"
+OUT="$(sed "s#__KEEPQUIET_BIN__#$H/bin/keepquiet#g" "$ROOT/plugins/codex/hooks.json.tmpl")"
 if [ -e "$CODEX_DIR/hooks.json" ]; then
-  echo "$OUT" > "$CODEX_DIR/hooks.agent-redact.json"
-  echo "已存在 $CODEX_DIR/hooks.json：请把 $CODEX_DIR/hooks.agent-redact.json 中的三个事件手动合并进去。"
+  echo "$OUT" > "$CODEX_DIR/hooks.keepquiet.json"
+  echo "已存在 $CODEX_DIR/hooks.json：请把 $CODEX_DIR/hooks.keepquiet.json 中的三个事件手动合并进去。"
 else
   echo "$OUT" > "$CODEX_DIR/hooks.json"
   echo "已写入 $CODEX_DIR/hooks.json"

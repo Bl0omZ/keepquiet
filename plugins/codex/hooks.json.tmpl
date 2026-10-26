@@ -1,14 +1,14 @@
 {
-  "description": "agent-redact: forced local redaction",
+  "description": "keepquiet: forced local redaction",
   "hooks": {
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "__AGENT_REDACT_BIN__ hook codex UserPromptSubmit",
+            "command": "__KEEPQUIET_BIN__ hook codex UserPromptSubmit",
             "timeout": 60,
-            "statusMessage": "agent-redact"
+            "statusMessage": "keepquiet"
           }
         ]
       }
@@ -18,9 +18,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "__AGENT_REDACT_BIN__ hook codex PreToolUse",
+            "command": "__KEEPQUIET_BIN__ hook codex PreToolUse",
             "timeout": 60,
-            "statusMessage": "agent-redact"
+            "statusMessage": "keepquiet"
           }
         ],
         "matcher": "*"
@@ -31,9 +31,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "__AGENT_REDACT_BIN__ hook codex PostToolUse",
+            "command": "__KEEPQUIET_BIN__ hook codex PostToolUse",
             "timeout": 60,
-            "statusMessage": "agent-redact"
+            "statusMessage": "keepquiet"
           }
         ],
         "matcher": "*"

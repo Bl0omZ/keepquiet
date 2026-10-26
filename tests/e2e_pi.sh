@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Real Pi CLI (pi --print) + agent-redact extension, anthropic baseUrl pointed at a local mock. Fake secrets only.
+# Real Pi CLI (pi --print) + keepquiet extension, anthropic baseUrl pointed at a local mock. Fake secrets only.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PI="${PI_BIN:-pi}"
 T="$(mktemp -d /tmp/ar-e2e-pi.XXXX)"
-export HOME="$T/home" PI_CODING_AGENT_DIR="$T/home/.pi/agent" AGENT_REDACT_HOME="$T/home/.agent-redact" MOCK_LOG="$T/mock.log"
-export AGENT_REDACT_BIN="$ROOT/dist/agent-redact"
+export HOME="$T/home" PI_CODING_AGENT_DIR="$T/home/.pi/agent" KEEPQUIET_HOME="$T/home/.keepquiet" MOCK_LOG="$T/mock.log"
+export KEEPQUIET_BIN="$ROOT/dist/keepquiet"
 mkdir -p "$PI_CODING_AGENT_DIR" "$T/work"; : > "$MOCK_LOG"
 FAKE="sk-proj-FAKE0nlyPI$(date +%s)abcdefghijklmnopqrstuvwxyz0123"
 printf 'OPENAI_API_KEY=%s\n' "$FAKE" > "$T/work/secret.env"

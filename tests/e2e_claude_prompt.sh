@@ -3,14 +3,14 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d /tmp/ar-e2e-claude-prompt.XXXX)"
-export HOME="$T/home" AGENT_REDACT_HOME="$T/home/.agent-redact" MOCK_LOG="$T/mock.log"
+export HOME="$T/home" KEEPQUIET_HOME="$T/home/.keepquiet" MOCK_LOG="$T/mock.log"
 mkdir -p "$HOME" "$T/work"; : > "$MOCK_LOG"
 FAKE="sk-proj-FAKE0nlyPROMPT$(date +%s)abcdefghijklmnopqrstuvwxyz0123"
 PORT=$((20000 + RANDOM % 20000))
 python3 "$ROOT/tests/mock_anthropic.py" $PORT & MOCK=$!
 trap 'kill $MOCK 2>/dev/null' EXIT
 sleep 0.5
-claude plugin marketplace add "$ROOT/plugins/claude-code" >/dev/null && claude plugin install agent-redact@agent-redact-local >/dev/null
+claude plugin marketplace add "$ROOT/plugins/claude-code" >/dev/null && claude plugin install keepquiet@keepquiet-local >/dev/null
 cd "$T/work"
 ANTHROPIC_BASE_URL="http://127.0.0.1:$PORT" ANTHROPIC_API_KEY="sk-ant-FAKE-not-real" \
   timeout 120 claude -p "my key is $FAKE please use it" --permission-mode bypassPermissions --model claude-sonnet-4-5 > "$T/out.txt" 2>&1

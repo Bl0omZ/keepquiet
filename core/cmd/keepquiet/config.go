@@ -10,10 +10,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/bl0omz/agent-redact/internal/redact"
+	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
-// Config is ~/.agent-redact/config.json. The first block maps 1:1 onto
+// Config is ~/.keepquiet/config.json. The first block maps 1:1 onto
 // magpie's Settings → Privacy (internal/masking/masking.go options()).
 type Config struct {
 	Secrets      bool              `json:"secrets"`
@@ -114,19 +114,30 @@ func (c Config) replaceFixed(s string) string {
 
 func (c Config) enabled() bool { return c.Secrets || c.Personal || len(c.Words) > 0 }
 
+// homeDir is where config.json, redact.key, and vault.json live.
+// KEEPQUIET_HOME wins when it is set. Otherwise the directory is ~/.keepquiet.
+// If that directory does not exist and ~/.agent-redact does, the old directory
+// is used so an existing vault keeps working. Files are not copied.
 func homeDir() string {
-	if d := os.Getenv("AGENT_REDACT_HOME"); d != "" {
+	if d := os.Getenv("KEEPQUIET_HOME"); d != "" {
 		return d
 	}
 	h, err := os.UserHomeDir()
 	if err != nil || h == "" {
 		h = "."
 	}
-	return filepath.Join(h, ".agent-redact")
+	neu := filepath.Join(h, ".keepquiet")
+	if _, err := os.Stat(neu); os.IsNotExist(err) {
+		old := filepath.Join(h, ".agent-redact")
+		if st, err := os.Stat(old); err == nil && st.IsDir() {
+			return old
+		}
+	}
+	return neu
 }
 
 func configPath() string {
-	if p := os.Getenv("AGENT_REDACT_CONFIG"); p != "" {
+	if p := os.Getenv("KEEPQUIET_CONFIG"); p != "" {
 		return p
 	}
 	return filepath.Join(homeDir(), "config.json")

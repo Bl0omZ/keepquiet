@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bl0omz/agent-redact/internal/redact"
+	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
 // engine masks and restores with one config and the shared vault.
@@ -175,7 +175,7 @@ func isBase64(s string) bool {
 // withheld replaces every string leaf, for when masking failed and the
 // output must not go through as it is.
 func withheld(v any) any {
-	out, _ := mapStrings(v, "", func(_, s string) string { return "[agent-redact: output withheld (internal error)]" })
+	out, _ := mapStrings(v, "", func(_, s string) string { return "[keepquiet: output withheld (internal error)]" })
 	return out
 }
 

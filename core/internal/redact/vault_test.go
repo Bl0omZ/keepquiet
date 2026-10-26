@@ -2,7 +2,7 @@ package redact
 
 import "testing"
 
-// agent-redact addition: Export/Import round trip, so a second process
+// keepquiet addition: Export/Import round trip, so a second process
 // restores what the first one masked.
 func TestVaultRoundTrip(t *testing.T) {
 	fake := "sk-proj-" + "FAKEfakeFAKEfake0123456789abcdefABCDEF"

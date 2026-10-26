@@ -1,4 +1,4 @@
-module github.com/bl0omz/agent-redact
+module github.com/bl0omz/keepquiet
 
 go 1.25.0
 

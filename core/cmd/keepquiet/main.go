@@ -1,4 +1,4 @@
-// Command agent-redact masks secrets and personal data before they reach a
+// Command keepquiet masks secrets and personal data before they reach a
 // model vendor, for Claude Code / Codex CLI hooks and the Pi extension. The
 // detection is magpie's internal/redact (MIT, (c) 2026 yetone), vendored.
 package main
@@ -9,26 +9,26 @@ import (
 	"io"
 	"os"
 
-	"github.com/bl0omz/agent-redact/internal/redact"
+	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
 const version = "0.1.0"
 
 func usage() {
-	fmt.Fprint(os.Stderr, `agent-redact `+version+` — local redaction for coding agents (detection: yetone/magpie internal/redact, MIT)
+	fmt.Fprint(os.Stderr, `keepquiet `+version+` — local redaction for coding agents (detection: yetone/magpie internal/redact, MIT)
 
 usage:
-  agent-redact mask            stdin text → masked text
-  agent-redact mask-json       stdin JSON request body → masked (magpie MaskJSON)
-  agent-redact restore         stdin text → placeholders restored
-  agent-redact scan            stdin text → report kinds found; exit 1 if any
-  agent-redact hook claude <Event>   Claude Code hook (UserPromptSubmit|PreToolUse|PostToolUse|MessageDisplay)
-  agent-redact hook codex <Event>    Codex CLI hook (UserPromptSubmit|PreToolUse|PostToolUse)
-  agent-redact serve           line-delimited JSON on stdio (Pi extension)
-  agent-redact vault path|clear
-  agent-redact config default  print the default config
-  agent-redact version
-env: AGENT_REDACT_HOME (default ~/.agent-redact), AGENT_REDACT_CONFIG
+  keepquiet mask            stdin text → masked text
+  keepquiet mask-json       stdin JSON request body → masked (magpie MaskJSON)
+  keepquiet restore         stdin text → placeholders restored
+  keepquiet scan            stdin text → report kinds found; exit 1 if any
+  keepquiet hook claude <Event>   Claude Code hook (UserPromptSubmit|PreToolUse|PostToolUse|MessageDisplay)
+  keepquiet hook codex <Event>    Codex CLI hook (UserPromptSubmit|PreToolUse|PostToolUse)
+  keepquiet serve           line-delimited JSON on stdio (Pi extension)
+  keepquiet vault path|clear
+  keepquiet config default  print the default config
+  keepquiet version
+env: KEEPQUIET_HOME (default ~/.keepquiet), KEEPQUIET_CONFIG
 `)
 }
 
@@ -50,7 +50,7 @@ func main() {
 		os.Exit(runHook(os.Args[2], event, os.Stdin, os.Stdout))
 	case "serve":
 		if err := serve(os.Stdin, os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, "agent-redact:", err)
+			fmt.Fprintln(os.Stderr, "keepquiet:", err)
 			os.Exit(1)
 		}
 	case "mask", "mask-json", "restore", "scan":
@@ -63,7 +63,7 @@ func main() {
 			fmt.Println(st.vaultPath())
 		}
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "agent-redact:", err)
+			fmt.Fprintln(os.Stderr, "keepquiet:", err)
 			os.Exit(1)
 		}
 	case "config":
@@ -80,12 +80,12 @@ func main() {
 func runText(op string) int {
 	in, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "agent-redact:", err)
+		fmt.Fprintln(os.Stderr, "keepquiet:", err)
 		return 1
 	}
 	e, err := newEngine()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "agent-redact:", err)
+		fmt.Fprintln(os.Stderr, "keepquiet:", err)
 		return 1
 	}
 	switch op {
@@ -106,7 +106,7 @@ func runText(op string) int {
 		return 1
 	}
 	if err := e.save(); err != nil {
-		fmt.Fprintln(os.Stderr, "agent-redact:", err)
+		fmt.Fprintln(os.Stderr, "keepquiet:", err)
 		return 1
 	}
 	return 0
@@ -128,7 +128,7 @@ func runHook(agent, event string, r io.Reader, w io.Writer) (code int) {
 			_ = json.NewEncoder(w).Encode(out)
 		}
 		if code == 2 {
-			fmt.Fprintln(os.Stderr, "agent-redact:", err)
+			fmt.Fprintln(os.Stderr, "keepquiet:", err)
 		}
 	}
 	defer func() {
