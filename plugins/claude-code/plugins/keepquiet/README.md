@@ -1,4 +1,4 @@
-# agent-redact (Claude Code plugin)
+# keepquiet (Claude Code plugin)
 
 Forced local redaction for Claude Code via hooks. PostToolUse masks secrets and
 personal data in every tool result (updatedToolOutput) before Claude sees it;

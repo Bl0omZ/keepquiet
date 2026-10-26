@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Real Codex CLI (codex exec) + agent-redact hooks, against a local mock Responses API. Fake secrets only.
+# Real Codex CLI (codex exec) + keepquiet hooks, against a local mock Responses API. Fake secrets only.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CODEX="${CODEX_BIN:-codex}"
 T="$(mktemp -d /tmp/ar-e2e-codex.XXXX)"
-export HOME="$T/home" CODEX_HOME="$T/home/.codex" AGENT_REDACT_HOME="$T/home/.agent-redact" MOCK_LOG="$T/mock.log"
+export HOME="$T/home" CODEX_HOME="$T/home/.codex" KEEPQUIET_HOME="$T/home/.keepquiet" MOCK_LOG="$T/mock.log"
 mkdir -p "$CODEX_HOME" "$T/work"; : > "$MOCK_LOG"
 FAKE="sk-proj-FAKE0nlyCODEX$(date +%s)abcdefghijklmnopqrstuvwxyz0123"
 printf 'OPENAI_API_KEY=%s\n' "$FAKE" > "$T/work/secret.env"

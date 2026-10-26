@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// hookInput is the union of the fields agent-redact reads from Claude Code
+// hookInput is the union of the fields keepquiet reads from Claude Code
 // and Codex hook stdin.
 type hookInput struct {
 	HookEventName string          `json:"hook_event_name"`
@@ -33,14 +33,14 @@ func claudeHook(event string, in hookInput) (map[string]any, error) {
 			return nil, nil
 		}
 		if e.masked() == 0 || (e.cfg.Prompt == "warn" && !e.blocked()) {
-			return map[string]any{"systemMessage": "agent-redact: 提示词含敏感数据（" + e.summary() + "），按配置未拦截，原文已发送。"}, nil
+			return map[string]any{"systemMessage": "keepquiet: 提示词含敏感数据（" + e.summary() + "），按配置未拦截，原文已发送。"}, nil
 		}
 		if err := e.save(); err != nil {
 			return nil, err
 		}
 		return map[string]any{
 			"decision": "block",
-			"reason": "agent-redact 已拦截：提示词含敏感数据（" + e.summary() + "）。Claude Code 的 hook 无法改写提示词，原文未发送给模型。\n" +
+			"reason": "keepquiet 已拦截：提示词含敏感数据（" + e.summary() + "）。Claude Code 的 hook 无法改写提示词，原文未发送给模型。\n" +
 				"如需继续，可复制下面的脱敏版本重新发送（占位符会在工具执行前于本地还原）：\n\n" + masked,
 			"hookSpecificOutput": hso{"hookEventName": "UserPromptSubmit", "suppressOriginalPrompt": true},
 		}, nil
@@ -60,7 +60,7 @@ func claudeHook(event string, in hookInput) (map[string]any, error) {
 		out := hso{"hookEventName": "PreToolUse", "updatedInput": nv}
 		if d := e.cfg.Claude.PreToolDecision; d != "none" {
 			out["permissionDecision"] = d
-			out["permissionDecisionReason"] = "agent-redact: 已在本地还原工具参数中的占位符"
+			out["permissionDecisionReason"] = "keepquiet: 已在本地还原工具参数中的占位符"
 		}
 		return map[string]any{"hookSpecificOutput": out}, nil
 
@@ -95,7 +95,7 @@ func claudeHook(event string, in hookInput) (map[string]any, error) {
 
 // claudeFailClosed is the answer when claudeHook failed.
 func claudeFailClosed(event string, in hookInput, err error) (map[string]any, int) {
-	msg := "agent-redact 内部错误，已按 fail-closed 处理: " + err.Error()
+	msg := "keepquiet 内部错误，已按 fail-closed 处理: " + err.Error()
 	switch event {
 	case "UserPromptSubmit":
 		return map[string]any{"decision": "block", "reason": msg,

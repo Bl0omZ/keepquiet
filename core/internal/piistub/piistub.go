@@ -1,9 +1,9 @@
 // Package piistub stands in for magpie's internal/pii (the optional local
-// PII model) so the vendored redact tests compile without it. agent-redact
+// PII model) so the vendored redact tests compile without it. keepquiet
 // does not ship the model: Installed is always false.
 package piistub
 
-import "github.com/bl0omz/agent-redact/internal/redact"
+import "github.com/bl0omz/keepquiet/internal/redact"
 
 func Installed() bool { return false }
 func Stop()           {}

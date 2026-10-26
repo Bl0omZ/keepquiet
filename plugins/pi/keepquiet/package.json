@@ -1,5 +1,5 @@
 {
-  "name": "pi-agent-redact",
+  "name": "pi-keepquiet",
   "version": "0.1.0",
   "description": "Forced local redaction for Pi (detection from yetone/magpie internal/redact, MIT)",
   "license": "MIT",

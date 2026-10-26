@@ -18,14 +18,14 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 			return nil, nil
 		}
 		if e.masked() == 0 || (e.cfg.Prompt == "warn" && !e.blocked()) {
-			return map[string]any{"systemMessage": "agent-redact: 提示词含敏感数据（" + e.summary() + "），按配置未拦截。"}, nil
+			return map[string]any{"systemMessage": "keepquiet: 提示词含敏感数据（" + e.summary() + "），按配置未拦截。"}, nil
 		}
 		if err := e.save(); err != nil {
 			return nil, err
 		}
 		return map[string]any{
 			"decision": "block",
-			"reason": "agent-redact 已拦截：提示词含敏感数据（" + e.summary() + "）。Codex 的 hook 无法改写提示词。\n" +
+			"reason": "keepquiet 已拦截：提示词含敏感数据（" + e.summary() + "）。Codex 的 hook 无法改写提示词。\n" +
 				"如需继续，可发送下面的脱敏版本（占位符会在工具执行前于本地还原）：\n\n" + masked,
 		}, nil
 
@@ -44,7 +44,7 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 		// Codex only honours updatedInput together with "allow"; in Codex
 		// that does not skip sandbox/approval checks (core registry.rs).
 		return map[string]any{"hookSpecificOutput": hso{"hookEventName": "PreToolUse",
-			"permissionDecision": "allow", "permissionDecisionReason": "agent-redact: 已在本地还原占位符",
+			"permissionDecision": "allow", "permissionDecisionReason": "keepquiet: 已在本地还原占位符",
 			"updatedInput": nv}}, nil
 
 	case "PostToolUse":
@@ -72,14 +72,14 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 		// result, so the masked output goes there.
 		return map[string]any{
 			"decision": "block",
-			"reason":   "[agent-redact] 工具输出含敏感数据（" + e.summary() + "），以下为本地脱敏后的完整输出：\n" + text,
+			"reason":   "[keepquiet] 工具输出含敏感数据（" + e.summary() + "），以下为本地脱敏后的完整输出：\n" + text,
 		}, nil
 	}
 	return nil, fmt.Errorf("unsupported Codex event %q", event)
 }
 
 func codexFailClosed(event string, err error) (map[string]any, int) {
-	msg := "agent-redact 内部错误，已按 fail-closed 处理: " + err.Error()
+	msg := "keepquiet 内部错误，已按 fail-closed 处理: " + err.Error()
 	switch event {
 	case "UserPromptSubmit", "PostToolUse":
 		return map[string]any{"decision": "block", "reason": msg}, 0

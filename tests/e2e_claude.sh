@@ -5,17 +5,17 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEC="${1:-none}"
 T="$(mktemp -d /tmp/ar-e2e-claude.XXXX)"
-export HOME="$T/home" AGENT_REDACT_HOME="$T/home/.agent-redact" MOCK_LOG="$T/mock.log"
+export HOME="$T/home" KEEPQUIET_HOME="$T/home/.keepquiet" MOCK_LOG="$T/mock.log"
 mkdir -p "$HOME" "$T/work"
 FAKE="sk-proj-FAKE0nlyTEST$(date +%s)abcdefghijklmnopqrstuvwxyz0123"
 printf 'OPENAI_API_KEY=%s\n' "$FAKE" > "$T/work/secret.env"
-mkdir -p "$AGENT_REDACT_HOME"
-printf '{"secrets":true,"personal":true,"claude":{"preToolDecision":"%s","displayRestore":%s}}' "$DEC" "${DISPLAY_RESTORE:-true}" > "$AGENT_REDACT_HOME/config.json"
+mkdir -p "$KEEPQUIET_HOME"
+printf '{"secrets":true,"personal":true,"claude":{"preToolDecision":"%s","displayRestore":%s}}' "$DEC" "${DISPLAY_RESTORE:-true}" > "$KEEPQUIET_HOME/config.json"
 PORT=$((20000 + RANDOM % 20000))
 python3 "$ROOT/tests/mock_anthropic.py" $PORT & MOCK=$!
 trap 'kill $MOCK 2>/dev/null' EXIT
 sleep 0.5
-claude plugin marketplace add "$ROOT/plugins/claude-code" >/dev/null && claude plugin install agent-redact@agent-redact-local >/dev/null || { echo "plugin install failed"; exit 1; }
+claude plugin marketplace add "$ROOT/plugins/claude-code" >/dev/null && claude plugin install keepquiet@keepquiet-local >/dev/null || { echo "plugin install failed"; exit 1; }
 cd "$T/work"
 ANTHROPIC_BASE_URL="http://127.0.0.1:$PORT" ANTHROPIC_API_KEY="sk-ant-FAKE-not-real" \
   timeout 180 claude -p "read secret.env and save the key to out.txt" \

@@ -3,7 +3,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d /tmp/ar-e2e-pi-prompt.XXXX)"
-export HOME="$T/home" PI_CODING_AGENT_DIR="$T/home/.pi/agent" AGENT_REDACT_HOME="$T/home/.agent-redact" MOCK_LOG="$T/mock.log" AGENT_REDACT_BIN="${AGENT_REDACT_BIN:-$ROOT/dist/agent-redact}"
+export HOME="$T/home" PI_CODING_AGENT_DIR="$T/home/.pi/agent" KEEPQUIET_HOME="$T/home/.keepquiet" MOCK_LOG="$T/mock.log" KEEPQUIET_BIN="${KEEPQUIET_BIN:-$ROOT/dist/keepquiet}"
 mkdir -p "$PI_CODING_AGENT_DIR" "$T/work"; : > "$MOCK_LOG"
 FAKE="sk-proj-FAKE0nlyPIPROMPT$(date +%s)abcdefghijklmnopqrstuvwxyz0123"
 "$ROOT/scripts/install-pi.sh" >/dev/null

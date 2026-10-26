@@ -2,11 +2,12 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/bl0omz/agent-redact/internal/redact"
+	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
 // All values below are fake test fixtures.
@@ -80,6 +81,56 @@ func TestConfigRejects(t *testing.T) {
 	writeConfig(t, `{"kinds":{"ip":true,"userhost":true}}`)
 	if _, err := loadConfig(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHomeDirLegacyFallback(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("KEEPQUIET_HOME", "")
+
+	neu := filepath.Join(root, ".keepquiet")
+	old := filepath.Join(root, ".agent-redact")
+	if got := homeDir(); got != neu {
+		t.Fatalf("neither dir: got %s, want %s", got, neu)
+	}
+
+	if err := os.Mkdir(old, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := homeDir(); got != old {
+		t.Fatalf("legacy only: got %s, want %s", got, old)
+	}
+
+	if err := os.Mkdir(neu, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := homeDir(); got != neu {
+		t.Fatalf("both dirs: got %s, want %s", got, neu)
+	}
+
+	if err := os.RemoveAll(old); err != nil {
+		t.Fatal(err)
+	}
+	if got := homeDir(); got != neu {
+		t.Fatalf("new only: got %s, want %s", got, neu)
+	}
+
+	// A non-directory at the old path is not a home.
+	if err := os.RemoveAll(neu); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := homeDir(); got != neu {
+		t.Fatalf("legacy file: got %s, want %s", got, neu)
+	}
+
+	custom := filepath.Join(root, "custom-home")
+	t.Setenv("KEEPQUIET_HOME", custom)
+	if got := homeDir(); got != custom {
+		t.Fatalf("KEEPQUIET_HOME: got %s, want %s", got, custom)
 	}
 }
 

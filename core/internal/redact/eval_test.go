@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	pii "github.com/bl0omz/agent-redact/internal/piistub"
-	"github.com/bl0omz/agent-redact/internal/redact"
+	pii "github.com/bl0omz/keepquiet/internal/piistub"
+	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
 // The masking evaluation: made-up texts of the kinds agents send (prose,

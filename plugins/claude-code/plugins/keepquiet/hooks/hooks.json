@@ -1,12 +1,12 @@
 {
-  "description": "agent-redact: forced local redaction",
+  "description": "keepquiet: forced local redaction",
   "hooks": {
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
             "args": [
               "hook",
               "claude",
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
             "args": [
               "hook",
               "claude",
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
             "args": [
               "hook",
               "claude",
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
             "args": [
               "hook",
               "claude",

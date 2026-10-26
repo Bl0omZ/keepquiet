@@ -16,12 +16,12 @@ const fakeKey = "sk-proj-FAKE0nlyUNITabcdefghijklmnopqrstuvwxyz0123456789"
 var phRe = regexp.MustCompile(`\{\{API_KEY_[a-z2-7]{8}\}\}`)
 
 func TestMain(m *testing.M) {
-	d, err := os.MkdirTemp("", "agent-redact-test")
+	d, err := os.MkdirTemp("", "keepquiet-test")
 	if err != nil {
 		panic(err)
 	}
 	os.Setenv("HOME", d)
-	os.Setenv("AGENT_REDACT_HOME", filepath.Join(d, ".agent-redact"))
+	os.Setenv("KEEPQUIET_HOME", filepath.Join(d, ".keepquiet"))
 	code := m.Run()
 	os.RemoveAll(d)
 	os.Exit(code)
@@ -33,7 +33,7 @@ func writeConfig(t *testing.T, cfg string) {
 	if err := os.WriteFile(p, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENT_REDACT_CONFIG", p)
+	t.Setenv("KEEPQUIET_CONFIG", p)
 }
 
 func hook(t *testing.T, agent, event string, in any) (map[string]any, int) {

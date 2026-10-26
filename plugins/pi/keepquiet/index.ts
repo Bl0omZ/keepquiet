@@ -1,8 +1,8 @@
 /**
- * agent-redact for Pi (earendil-works/pi coding agent) — forced local redaction.
+ * keepquiet for Pi (earendil-works/pi coding agent) — forced local redaction.
  *
  * Detection: yetone/magpie internal/redact (MIT, (c) 2026 yetone), run by the
- * agent-redact Go binary in `serve` mode (one long-lived child process).
+ * keepquiet Go binary in `serve` mode (one long-lived child process).
  *
  *  - before_provider_request: the whole serialized provider payload (system
  *    prompt, history, tool results, tool definitions) is masked the way
@@ -25,14 +25,14 @@ import { createInterface } from "node:readline";
 type Resp = { id: number; error?: string; [k: string]: unknown };
 
 const DENY_RESTORE = new Set(
-	(process.env.AGENT_REDACT_RESTORE_DENY ?? "web_search,web_fetch,WebSearch,WebFetch").split(",").filter(Boolean),
+	(process.env.KEEPQUIET_RESTORE_DENY ?? "web_search,web_fetch,WebSearch,WebFetch").split(",").filter(Boolean),
 );
 
 function binPath(): string {
-	if (process.env.AGENT_REDACT_BIN) return process.env.AGENT_REDACT_BIN;
-	const home = process.env.AGENT_REDACT_HOME ?? join(homedir(), ".agent-redact");
-	const p = join(home, "bin", "agent-redact");
-	return existsSync(p) ? p : "agent-redact";
+	if (process.env.KEEPQUIET_BIN) return process.env.KEEPQUIET_BIN;
+	const home = process.env.KEEPQUIET_HOME ?? join(homedir(), ".keepquiet");
+	const p = join(home, "bin", "keepquiet");
+	return existsSync(p) ? p : "keepquiet";
 }
 
 class Redactor {
@@ -43,14 +43,14 @@ class Redactor {
 	private start(): ChildProcessWithoutNullStreams {
 		if (this.child && this.child.exitCode === null && !this.child.killed) return this.child;
 		const child = spawn(binPath(), ["serve"], { stdio: ["pipe", "pipe", "pipe"] });
-		child.stderr.on("data", (d) => process.stderr.write(`[agent-redact] ${d}`));
+		child.stderr.on("data", (d) => process.stderr.write(`[keepquiet] ${d}`));
 		const fail = (e: Error) => {
 			for (const p of this.pending.values()) p.reject(e);
 			this.pending.clear();
 			if (this.child === child) this.child = undefined;
 		};
 		child.on("error", fail);
-		child.on("exit", (code) => fail(new Error(`agent-redact serve exited (${code})`)));
+		child.on("exit", (code) => fail(new Error(`keepquiet serve exited (${code})`)));
 		createInterface({ input: child.stdout }).on("line", (line) => {
 			let r: Resp;
 			try {
@@ -74,7 +74,7 @@ class Redactor {
 		return new Promise<Resp>((resolve, reject) => {
 			const t = setTimeout(() => {
 				this.pending.delete(id);
-				reject(new Error(`agent-redact ${op} timed out`));
+				reject(new Error(`keepquiet ${op} timed out`));
 			}, timeoutMs);
 			this.pending.set(id, {
 				resolve: (r) => (clearTimeout(t), resolve(r)),
@@ -98,15 +98,15 @@ export default function (pi: ExtensionAPI) {
 			const res = await r.call("maskRequest", { payload: event.payload });
 			if (res.blocked) {
 				ctx.abort();
-				ctx.ui?.notify?.(`agent-redact: 请求含被设为 block 的敏感数据（${res.summary}），已中止`, "error");
+				ctx.ui?.notify?.(`keepquiet: 请求含被设为 block 的敏感数据（${res.summary}），已中止`, "error");
 				return {};
 			}
-			if ((res.masked as number) > 0) ctx.ui?.setStatus?.("agent-redact", `已脱敏 ${res.summary}`);
+			if ((res.masked as number) > 0) ctx.ui?.setStatus?.("keepquiet", `已脱敏 ${res.summary}`);
 			return res.payload;
 		} catch (e) {
 			// A thrown error would let Pi send the original payload: fail closed.
 			ctx.abort();
-			ctx.ui?.notify?.(`agent-redact 脱敏失败，已中止请求: ${(e as Error).message}`, "error");
+			ctx.ui?.notify?.(`keepquiet 脱敏失败，已中止请求: ${(e as Error).message}`, "error");
 			return {};
 		}
 	});
@@ -133,7 +133,7 @@ export default function (pi: ExtensionAPI) {
 				Object.assign(input, res.value as Record<string, unknown>);
 			}
 		} catch (e) {
-			return { block: true, reason: `agent-redact 还原参数失败: ${(e as Error).message}` };
+			return { block: true, reason: `keepquiet 还原参数失败: ${(e as Error).message}` };
 		}
 		return;
 	});

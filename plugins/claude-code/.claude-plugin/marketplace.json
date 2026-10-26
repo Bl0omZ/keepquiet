@@ -1,13 +1,13 @@
 {
-  "name": "agent-redact-local",
-  "description": "agent-redact 本地强制脱敏插件（本地 marketplace）",
+  "name": "keepquiet-local",
+  "description": "keepquiet 本地强制脱敏插件（本地 marketplace）",
   "owner": {
     "name": "Bl0omZ"
   },
   "plugins": [
     {
-      "name": "agent-redact",
-      "source": "./plugins/agent-redact",
+      "name": "keepquiet",
+      "source": "./plugins/keepquiet",
       "description": "强制本地脱敏：工具输出发送前打码，工具执行前本地还原；含敏感数据的提示词直接拦截（检测规则来自 yetone/magpie，MIT）"
     }
   ]

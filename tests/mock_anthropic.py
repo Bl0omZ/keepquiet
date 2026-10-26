@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mock Anthropic Messages API (SSE) for agent-redact e2e tests (Claude Code "Bash" / Pi "bash").
+"""Mock Anthropic Messages API (SSE) for keepquiet e2e tests (Claude Code "Bash" / Pi "bash").
 
 Turn logic (by the last user message):
   - no tool_result yet           -> tool_use Bash "cat secret.env"

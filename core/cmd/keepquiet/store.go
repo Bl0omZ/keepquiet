@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/bl0omz/agent-redact/internal/redact"
+	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
 // store is the placeholder vault shared by every hook process:
-// ~/.agent-redact/{redact.key, vault.json, vault.lock}. vault.json holds
+// ~/.keepquiet/{redact.key, vault.json, vault.lock}. vault.json holds
 // the real values in plain text (mode 0600), as magpie holds them in the
 // gateway's memory; see README.
 type store struct {
