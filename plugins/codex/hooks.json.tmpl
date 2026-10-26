@@ -1,0 +1,43 @@
+{
+  "description": "agent-redact: forced local redaction",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__AGENT_REDACT_BIN__ hook codex UserPromptSubmit",
+            "timeout": 60,
+            "statusMessage": "agent-redact"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__AGENT_REDACT_BIN__ hook codex PreToolUse",
+            "timeout": 60,
+            "statusMessage": "agent-redact"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__AGENT_REDACT_BIN__ hook codex PostToolUse",
+            "timeout": 60,
+            "statusMessage": "agent-redact"
+          }
+        ],
+        "matcher": "*"
+      }
+    ]
+  }
+}

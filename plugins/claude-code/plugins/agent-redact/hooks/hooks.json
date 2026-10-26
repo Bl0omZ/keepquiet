@@ -1,0 +1,74 @@
+{
+  "description": "agent-redact: forced local redaction",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "args": [
+              "hook",
+              "claude",
+              "UserPromptSubmit"
+            ],
+            "timeout": 60,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "args": [
+              "hook",
+              "claude",
+              "PreToolUse"
+            ],
+            "timeout": 60,
+            "onFailure": "block"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "args": [
+              "hook",
+              "claude",
+              "PostToolUse"
+            ],
+            "timeout": 60,
+            "onFailure": "block"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "MessageDisplay": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agent-redact",
+            "args": [
+              "hook",
+              "claude",
+              "MessageDisplay"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

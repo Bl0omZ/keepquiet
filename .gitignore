@@ -1,0 +1,5 @@
+dist/
+*.zip
+.DS_Store
+core/agent-redact
+**/bin/agent-redact

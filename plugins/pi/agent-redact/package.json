@@ -1,0 +1,10 @@
+{
+  "name": "pi-agent-redact",
+  "version": "0.1.0",
+  "description": "Forced local redaction for Pi (detection from yetone/magpie internal/redact, MIT)",
+  "license": "MIT",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "pi": { "extensions": ["./index.ts"] },
+  "peerDependencies": { "@earendil-works/pi-coding-agent": "*" }
+}
