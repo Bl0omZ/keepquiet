@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
+            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
             "args": [
               "hook",
               "claude",
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
+            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
             "args": [
               "hook",
               "claude",
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
+            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
             "args": [
               "hook",
               "claude",
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/keepquiet",
+            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
             "args": [
               "hook",
               "claude",

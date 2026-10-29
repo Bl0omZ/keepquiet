@@ -1,0 +1,12 @@
+{
+  "name": "keepquiet",
+  "description": "keepquiet local redaction for coding agents",
+  "owner": { "name": "Bl0omZ" },
+  "plugins": [
+    {
+      "name": "keepquiet",
+      "source": "./plugins/claude-code/plugins/keepquiet",
+      "description": "Local redaction for Claude Code hooks"
+    }
+  ]
+}

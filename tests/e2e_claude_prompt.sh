@@ -10,7 +10,8 @@ PORT=$((20000 + RANDOM % 20000))
 python3 "$ROOT/tests/mock_anthropic.py" $PORT & MOCK=$!
 trap 'kill $MOCK 2>/dev/null' EXIT
 sleep 0.5
-claude plugin marketplace add "$ROOT/plugins/claude-code" >/dev/null && claude plugin install keepquiet@keepquiet-local >/dev/null
+"$ROOT/scripts/install-bin.sh" >/dev/null
+claude plugin marketplace add "$ROOT" >/dev/null && claude plugin install keepquiet@keepquiet >/dev/null
 cd "$T/work"
 ANTHROPIC_BASE_URL="http://127.0.0.1:$PORT" ANTHROPIC_API_KEY="sk-ant-FAKE-not-real" \
   timeout 120 claude -p "my key is $FAKE please use it" --permission-mode bypassPermissions --model claude-sonnet-4-5 > "$T/out.txt" 2>&1
