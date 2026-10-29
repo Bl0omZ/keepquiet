@@ -6,5 +6,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 H="${KEEPQUIET_HOME:-$HOME/.keepquiet}"
 mkdir -p "$H/bin" && chmod 700 "$H"
 install -m 0755 "$ROOT/dist/keepquiet" "$H/bin/keepquiet"
-[ -f "$H/config.json" ] || { "$H/bin/keepquiet" config default > "$H/config.json"; chmod 600 "$H/config.json"; }
+if [ ! -f "$H/config.json" ]; then
+  CONFIG_TMP="$(mktemp "$H/config.XXXXXX")"
+  trap 'rm -f "$CONFIG_TMP"' EXIT
+  "$H/bin/keepquiet" config default > "$CONFIG_TMP"
+  chmod 600 "$CONFIG_TMP"
+  mv "$CONFIG_TMP" "$H/config.json"
+fi
 echo "installed $H/bin/keepquiet (config: $H/config.json)"
