@@ -45,7 +45,9 @@ func hook(t *testing.T, agent, event string, in any) (map[string]any, int) {
 		return nil, code
 	}
 	var out map[string]any
-	if err := json.Unmarshal(w.Bytes(), &out); err != nil {
+	d := json.NewDecoder(&w)
+	d.UseNumber()
+	if err := d.Decode(&out); err != nil {
 		t.Fatalf("bad hook output %q: %v", w.String(), err)
 	}
 	return out, code
@@ -94,6 +96,53 @@ func TestClaudePostToolUseCleanIsSilent(t *testing.T) {
 	})
 	if code != 0 || out != nil {
 		t.Fatalf("expected no output, got %d %s", code, dump(out))
+	}
+}
+
+func TestHooksMaskStructuredCredentials(t *testing.T) {
+	writeConfig(t, `{"secrets":true,"personal":true}`)
+	for _, agent := range []string{"claude", "codex"} {
+		t.Run(agent, func(t *testing.T) {
+			secret := "OpaqueFakeStructuredToken12345" + agent
+			out, code := hook(t, agent, "PostToolUse", map[string]any{
+				"tool_name": "mcp__demo__credentials",
+				"tool_response": map[string]any{"structuredContent": map[string]any{
+					"access_token": secret, "token_id": "3f2b6c1e8a4d4f7e9b1a2c3d4e5f6a7b",
+					"count": 1234567890123456789,
+				}},
+			})
+			if code != 0 || out == nil || strings.Contains(dump(out), secret) {
+				t.Fatalf("structured credential not masked: %s", dump(out))
+			}
+			if !strings.Contains(dump(out), "3f2b6c1e8a4d4f7e9b1a2c3d4e5f6a7b") || !strings.Contains(dump(out), "1234567890123456789") {
+				t.Fatalf("identifier or number changed: %s", dump(out))
+			}
+		})
+	}
+}
+
+func TestHooksWarnOnUnchangedToolOutput(t *testing.T) {
+	writeConfig(t, `{"personal":true,"actions":{"EMAIL":"warn"}}`)
+	for _, agent := range []string{"claude", "codex"} {
+		out, code := hook(t, agent, "PostToolUse", map[string]any{
+			"tool_name": "Bash", "tool_response": map[string]any{"stdout": "Contact: fake@acme-corp.cn"},
+		})
+		if code != 0 || out["systemMessage"] == nil || out["decision"] != nil || strings.Contains(dump(out), "fake@acme-corp.cn") {
+			t.Fatalf("%s: expected a warning without changing the output: %s", agent, dump(out))
+		}
+	}
+}
+
+func TestHooksStopOnBlockedToolOutput(t *testing.T) {
+	writeConfig(t, `{"secrets":true,"actions":{"PRIVATE_KEY":"block"}}`)
+	const privateKey = "-----BEGIN PRIVATE KEY-----\nFAKE-only-test-data\n-----END PRIVATE KEY-----"
+	for _, agent := range []string{"claude", "codex"} {
+		out, code := hook(t, agent, "PostToolUse", map[string]any{
+			"tool_name": "Bash", "tool_response": map[string]any{"stdout": privateKey},
+		})
+		if code != 0 || out["continue"] != false || out["stopReason"] == nil || strings.Contains(dump(out), privateKey) {
+			t.Fatalf("%s: block must stop with a safe reason: %s", agent, dump(out))
+		}
 	}
 }
 

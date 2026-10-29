@@ -84,6 +84,19 @@ func (s *store) ensureKey() error {
 
 func (s *store) vaultPath() string { return filepath.Join(s.dir, "vault.json") }
 
+// A running serve keeps a shared lock so clear cannot leave stale values in memory.
+func (s *store) serveLock(how int) (*os.File, error) {
+	f, err := os.OpenFile(filepath.Join(s.dir, "serve.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), how); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // load imports the vault; called with the lock held.
 func (s *store) load() error {
 	b, err := os.ReadFile(s.vaultPath())
@@ -145,11 +158,19 @@ func (s *store) save() error {
 }
 
 func (s *store) clear() error {
+	f, err := s.serveLock(syscall.LOCK_EX | syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		return errors.New("请先退出 Pi（keepquiet serve 仍在运行），再清空 vault")
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 	if err := s.acquire(); err != nil {
 		return err
 	}
 	defer s.release()
-	err := os.Remove(s.vaultPath())
+	err = os.Remove(s.vaultPath())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}

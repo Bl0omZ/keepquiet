@@ -1,6 +1,6 @@
 # keepquiet
 
-keepquiet 在请求离开本机之前，把密钥和个人信息换成 `{{KIND_xxxxxxxx}}` 占位符。Claude Code、Codex CLI、Pi 通过 hook 或扩展自动调用它；模型看不到原文，也不能跳过脱敏。检测规则来自 [yetone/magpie](https://github.com/yetone/magpie) 的 `internal/redact`，不经过 magpie 网关。你已经在用这些 agent、又不想把真实密钥发给模型厂商时，用它。
+keepquiet 在支持的 hook 或扩展路径上，把检测到的密钥和个人信息换成 `{{KIND_xxxxxxxx}}` 占位符。Claude Code、Codex CLI、Pi 自动调用它，覆盖范围见下方“局限”。检测规则来自 [yetone/magpie](https://github.com/yetone/magpie) 的 `internal/redact`，不经过 magpie 网关。你已经在用这些 agent、又不想把真实密钥发给模型厂商时，用它。
 
 ## 如何安装
 
@@ -29,7 +29,7 @@ printf 'sk-proj-not-a-real-key-0123456789abcdef\n' | KEEPQUIET_HOME=/tmp/keepqui
 scripts/install-claude.sh
 ```
 
-脚本会校验插件、注册本地 marketplace `keepquiet-local`，再执行 `claude plugin install keepquiet@keepquiet-local`。结束时 `claude plugin list` 应列出 `keepquiet`。
+脚本先安装本机二进制，再校验插件、注册 GitHub marketplace `Bl0omZ/keepquiet`，执行 `claude plugin install keepquiet@keepquiet`。结束时 `claude plugin list` 应列出已启用的 `keepquiet@keepquiet`。重启 Claude Code 后生效；停用可执行 `claude plugin disable keepquiet@keepquiet`。
 
 ### Codex CLI
 
@@ -54,6 +54,7 @@ Pi 查找二进制的顺序：`KEEPQUIET_BIN`，然后 `$KEEPQUIET_HOME/bin/keep
 配置文件是 `~/.keepquiet/config.json`。用 `KEEPQUIET_HOME` 改整个数据目录，用 `KEEPQUIET_CONFIG` 只改配置文件路径。未设置 `KEEPQUIET_HOME` 且 `~/.keepquiet` 不存在、但 `~/.agent-redact` 存在时，keepquiet 继续读取旧目录里的 vault，不会复制文件。安装脚本会创建 `~/.keepquiet`，之后不再走这条兼容路径。
 
 未知字段会报错。配置损坏时 hook 按 fail-closed 处理。
+Pi 在下一次请求或还原操作时读取最新配置，无需重启。
 
 ```json
 {
@@ -84,7 +85,7 @@ Pi 查找二进制的顺序：`KEEPQUIET_BIN`，然后 `$KEEPQUIET_HOME/bin/keep
 | `kinds` | 类别 ID，仅允许 `ssn` `passport` `iban` `birthday` `mac` `serial` `home` `userhost` `ip` `bucket`。写 `PHONE` 会报错。不想脱敏某一类时用 `actions`。`ip` 会跳过内网、回环和常见公共 DNS。 |
 | `words` / `wordsAnyCase` / `allow` | 关键词黑名单（命中变为 `TERM`）与白名单（永不脱敏）。 |
 | `rules` | 最多 32 条，每条写 `prefix` 或 `regex`（RE2）。`prefix` 长 3-64，后面至少 8 个 `[A-Za-z0-9_-]`。`regex` 不超过 300 字符，有捕获组时只替换第 1 组。 |
-| `actions` | `mask`（默认）、`warn`（放行并提示）、`block`（脱敏并拦截）。 |
+| `actions` | `mask`（默认）、`warn`（放行并提示）、`block`（脱敏并停止本轮）。工具输出命中 `block` 时，工具已发生的副作用不会撤销。 |
 | `zhNames` | 默认关闭。打开后启用规则式中文姓名识别。不识别英文人名。 |
 | `replace` | 把某类占位符换成固定文字。单向，不能还原。只对 Claude Code 与 Codex 生效。Pi 仍用占位符。 |
 | `prompt` | 提示词含敏感数据时：`block`（默认）或 `warn`。只对 Claude Code 与 Codex 有效。 |
@@ -124,7 +125,7 @@ keepquiet version
 | `KEEPQUIET_HOME` | 数据目录，默认 `~/.keepquiet` |
 | `KEEPQUIET_CONFIG` | 配置文件路径，默认 `$KEEPQUIET_HOME/config.json` |
 | `KEEPQUIET_BIN` | Pi 扩展使用的二进制路径 |
-| `KEEPQUIET_RESTORE_DENY` | Pi 侧永不还原的工具名，逗号分隔 |
+| `KEEPQUIET_RESTORE_DENY` | Pi 侧额外永不还原的工具名，逗号分隔；配置文件中的名单仍生效 |
 
 ## 局限
 
@@ -133,8 +134,17 @@ keepquiet version
 3. Codex 在二进制缺失或进程被系统杀掉时 fail-open，密钥会原样发出。keepquiet 自己会接住内部错误并输出 block。
 4. Claude Code 的 `PostToolUseFailure` 不能改写，失败工具的报错可能含原文。
 5. `replace` 对 Pi 无效。Pi 会改写含签名 thinking 的完整请求，继续使用占位符。
-6. `vault.json` 是明文映射。用 `keepquiet vault clear` 清空。自行保护 `~/.keepquiet/`。
+6. `vault.json` 是明文映射。退出所有 Pi / `keepquiet serve` 进程后，用 `keepquiet vault clear` 清空；有常驻进程时命令会拒绝清理。清空后旧占位符无法还原。自行保护 `~/.keepquiet/`。
 7. `example.com` 等保留域名的邮箱不会被脱敏。规则会漏报也会误报。
+8. 工具输入中的占位符按原文还原，不解析 shell、SQL 或生成文件的语法。原文含引号、换行等字符时，优先让工具通过独立参数、环境变量或文件引用使用该值。
+
+## 开发验证
+
+```bash
+cd core && go test ./...
+```
+
+在仓库根目录执行 `scripts/build.sh` 后，用 Node.js 24 运行 `node --test tests/pi.test.mjs`。该测试调用实际 Pi 扩展回调和本地二进制，不请求模型服务。上游 `TestMaskEval` 的 `both` 列包含录制的模型结果；keepquiet 的默认检测只使用规则，不能用该列代表插件召回率。
 
 ## 署名
 

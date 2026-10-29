@@ -9,8 +9,8 @@
  *    magpie's gateway masks a request body (redact.MaskJSON). Fail-closed: if
  *    masking fails, the run is aborted and an empty payload is returned.
  *  - message_end (assistant): placeholders are restored in the finalized
- *    message (text + tool call arguments), so the transcript, the screen and
- *    the tools see real values; the next request masks them again
+ *    message's display content; tool call arguments wait for tool_call so
+ *    the restore policy can be applied. The next request masks text again
  *    (same placeholder, the HMAC key is fixed).
  *  - tool_call: placeholders left in a tool's input are restored (backup for
  *    message_end); tools in restoreDenyTools are left alone.
@@ -25,7 +25,7 @@ import { createInterface } from "node:readline";
 type Resp = { id: number; error?: string; [k: string]: unknown };
 
 const DENY_RESTORE = new Set(
-	(process.env.KEEPQUIET_RESTORE_DENY ?? "web_search,web_fetch,WebSearch,WebFetch").split(",").filter(Boolean),
+	(process.env.KEEPQUIET_RESTORE_DENY ?? "").split(",").filter(Boolean),
 );
 
 function binPath(): string {
@@ -102,6 +102,7 @@ export default function (pi: ExtensionAPI) {
 				return {};
 			}
 			if ((res.masked as number) > 0) ctx.ui?.setStatus?.("keepquiet", `已脱敏 ${res.summary}`);
+			if (res.warning) ctx.ui?.notify?.(res.warning as string, "warning");
 			return res.payload;
 		} catch (e) {
 			// A thrown error would let Pi send the original payload: fail closed.
@@ -112,11 +113,15 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("message_end", async (event) => {
-		const m = event.message as { role?: string };
-		if (m?.role !== "assistant") return;
+		const m = event.message;
+		if (m.role !== "assistant") return;
 		try {
-			const res = await r.call("restore", { value: event.message });
-			if (res.changed) return { message: res.value as typeof event.message };
+			const res = await r.call("restore", { value: m.content.filter(c => c.type !== "toolCall") });
+			if (res.changed) {
+				const content = res.value as typeof m.content;
+				let i = 0;
+				return { message: { ...m, content: m.content.map(c => c.type === "toolCall" ? c : content[i++]) } };
+			}
 		} catch {
 			// Restoring is display/tool convenience; the placeholder stays.
 		}
@@ -126,7 +131,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event) => {
 		if (DENY_RESTORE.has(event.toolName)) return;
 		try {
-			const res = await r.call("restore", { value: event.input });
+			const res = await r.call("restore", { value: event.input, toolName: event.toolName });
 			if (res.changed) {
 				const input = event.input as Record<string, unknown>;
 				for (const k of Object.keys(input)) delete input[k];

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"syscall"
 )
 
 // serve is a line-delimited JSON loop on stdio, for the Pi extension: one
@@ -16,10 +17,11 @@ import (
 //	→ {"id":3,"op":"maskValue","value":...}    ← {"id":3,"value":...,"masked":1,...}
 //	← {"id":n,"error":"..."} when a request failed: the caller must fail closed.
 type serveReq struct {
-	ID      int64           `json:"id"`
-	Op      string          `json:"op"`
-	Payload json.RawMessage `json:"payload,omitempty"`
-	Value   json.RawMessage `json:"value,omitempty"`
+	ID       int64           `json:"id"`
+	Op       string          `json:"op"`
+	Payload  json.RawMessage `json:"payload,omitempty"`
+	Value    json.RawMessage `json:"value,omitempty"`
+	ToolName string          `json:"toolName,omitempty"`
 }
 
 func serve(r io.Reader, w io.Writer) error {
@@ -27,6 +29,11 @@ func serve(r io.Reader, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	lock, err := e.st.serveLock(syscall.LOCK_SH)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<20), 256<<20)
 	enc := json.NewEncoder(w)
@@ -48,6 +55,11 @@ func serveOne(e *engine, q serveReq) (resp map[string]any) {
 		}
 	}()
 	e.hits = nil
+	cfg, err := loadConfig()
+	if err != nil {
+		return map[string]any{"id": q.ID, "error": err.Error()}
+	}
+	e.cfg = cfg
 	switch q.Op {
 	case "ping":
 		return map[string]any{"id": q.ID, "ok": true}
@@ -56,7 +68,7 @@ func serveOne(e *engine, q serveReq) (resp map[string]any) {
 		if err := e.save(); err != nil {
 			return map[string]any{"id": q.ID, "error": err.Error()}
 		}
-		return map[string]any{"id": q.ID, "payload": json.RawMessage(out), "masked": e.masked(), "blocked": e.blocked(), "summary": e.summary()}
+		return map[string]any{"id": q.ID, "payload": json.RawMessage(out), "masked": e.masked(), "blocked": e.blocked(), "summary": e.summary(), "warning": e.warning()}
 	case "maskValue", "restore":
 		var v any
 		if err := decodeJSON(q.Value, &v); err != nil {
@@ -64,7 +76,9 @@ func serveOne(e *engine, q serveReq) (resp map[string]any) {
 		}
 		var changed bool
 		if q.Op == "restore" {
-			v, changed = e.restoreValue(v)
+			if q.ToolName == "" || e.cfg.restoreToolInput() && !e.cfg.restoreDenied(q.ToolName) {
+				v, changed = e.restoreValue(v)
+			}
 		} else {
 			v, changed = e.maskValue(v)
 			if err := e.save(); err != nil {
@@ -73,11 +87,6 @@ func serveOne(e *engine, q serveReq) (resp map[string]any) {
 		}
 		return map[string]any{"id": q.ID, "value": v, "changed": changed, "masked": e.masked(), "blocked": e.blocked(), "summary": e.summary()}
 	case "reload":
-		cfg, err := loadConfig()
-		if err != nil {
-			return map[string]any{"id": q.ID, "error": err.Error()}
-		}
-		e.cfg = cfg
 		return map[string]any{"id": q.ID, "ok": true}
 	}
 	return map[string]any{"id": q.ID, "error": "unknown op " + q.Op}

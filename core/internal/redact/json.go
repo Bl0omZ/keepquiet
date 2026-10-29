@@ -74,7 +74,7 @@ var signatureKeys = []string{"signature", "thoughtSignature", "thought_signature
 // (definitions).
 func scan(body []byte) (signed, args, defs []string) {
 	found := false
-	for _, k := range append(signatureKeys, "tool_use", "functionCall", "function_call") {
+	for _, k := range append(signatureKeys, "tool_use", "functionCall", "function_call", "functionResponse") {
 		found = found || bytes.Contains(body, []byte(`"`+k+`"`))
 	}
 	for _, k := range defKeys {
@@ -99,7 +99,8 @@ func scan(body []byte) (signed, args, defs []string) {
 			t, _ := x["type"].(string)
 			for k, c := range x {
 				if k == "input" && (t == "tool_use" || t == "server_tool_use") ||
-					k == "args" && (key == "functionCall" || key == "function_call") {
+					k == "args" && (key == "functionCall" || key == "function_call") ||
+					k == "response" && key == "functionResponse" {
 					args = append(args, join(path, k))
 					continue
 				}
@@ -409,7 +410,9 @@ func MaskJSON(body []byte, o Options) ([]byte, int) {
 		if !masked(path, key, s) {
 			return s
 		}
-		t, n := mask(s, o, put, asJSON(key, ""))
+		fieldOptions := o
+		fieldOptions.field = key
+		t, n := mask(s, fieldOptions, put, asJSON(key, ""))
 		total += n
 		return t
 	})

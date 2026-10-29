@@ -63,7 +63,11 @@ func (e *engine) maskValue(v any) (any, bool) {
 		if skipLeaf(key, s) {
 			return s
 		}
-		return e.maskText(s)
+		if !e.cfg.enabled() {
+			return s
+		}
+		out, _ := redact.MaskField(key, s, e.opts())
+		return e.cfg.replaceFixed(out)
 	})
 }
 
@@ -90,6 +94,15 @@ func (e *engine) blocked() bool {
 		}
 	}
 	return false
+}
+
+func (e *engine) warning() string {
+	for _, h := range e.hits {
+		if h.Action == redact.Warn {
+			return "keepquiet: 敏感数据按 warn 配置原文放行（" + e.summary() + "）"
+		}
+	}
+	return ""
 }
 
 // summary is "API_KEY×2, EMAIL×1" with no values in it.

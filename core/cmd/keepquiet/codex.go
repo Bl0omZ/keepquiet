@@ -57,6 +57,9 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 		}
 		nv, changed := e.maskValue(v)
 		if !changed {
+			if warning := e.warning(); warning != "" {
+				return map[string]any{"systemMessage": warning}, nil
+			}
 			return nil, nil
 		}
 		if err := e.save(); err != nil {
@@ -70,10 +73,18 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 		// Codex can't rewrite a built-in tool's output (updatedMCPToolOutput
 		// is unsupported); a block's reason replaces the model-visible
 		// result, so the masked output goes there.
-		return map[string]any{
+		out := map[string]any{
 			"decision": "block",
 			"reason":   "[keepquiet] 工具输出含敏感数据（" + e.summary() + "），以下为本地脱敏后的完整输出：\n" + text,
-		}, nil
+		}
+		if warning := e.warning(); warning != "" {
+			out["systemMessage"] = warning
+		}
+		if e.blocked() {
+			out["continue"] = false
+			out["stopReason"] = "keepquiet: 工具输出命中 block 配置（" + e.summary() + "），已停止"
+		}
+		return out, nil
 	}
 	return nil, fmt.Errorf("unsupported Codex event %q", event)
 }

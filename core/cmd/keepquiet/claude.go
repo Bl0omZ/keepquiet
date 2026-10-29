@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // hookInput is the union of the fields keepquiet reads from Claude Code
@@ -22,6 +23,10 @@ type hso = map[string]any
 // print (nil for none). err means it could not decide; the caller turns
 // that into the event's fail-closed answer.
 func claudeHook(event string, in hookInput) (map[string]any, error) {
+	// Every restorable placeholder contains an underscore.
+	if event == "MessageDisplay" && !strings.Contains(in.Delta, "_") {
+		return nil, nil
+	}
 	e, err := newEngine()
 	if err != nil {
 		return nil, err
@@ -74,12 +79,23 @@ func claudeHook(event string, in hookInput) (map[string]any, error) {
 		}
 		nv, changed := e.maskValue(v)
 		if !changed {
+			if warning := e.warning(); warning != "" {
+				return map[string]any{"systemMessage": warning}, nil
+			}
 			return nil, nil
 		}
 		if err := e.save(); err != nil {
 			return nil, err
 		}
-		return map[string]any{"hookSpecificOutput": hso{"hookEventName": "PostToolUse", "updatedToolOutput": nv}}, nil
+		out := map[string]any{"hookSpecificOutput": hso{"hookEventName": "PostToolUse", "updatedToolOutput": nv}}
+		if warning := e.warning(); warning != "" {
+			out["systemMessage"] = warning
+		}
+		if e.blocked() {
+			out["continue"] = false
+			out["stopReason"] = "keepquiet: 工具输出命中 block 配置（" + e.summary() + "），已停止"
+		}
+		return out, nil
 
 	case "MessageDisplay":
 		if !e.cfg.displayRestore() || in.Delta == "" {

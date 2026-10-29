@@ -69,7 +69,8 @@ type Options struct {
 	found map[string][]Found
 	// sent is masking for a vendor (Mask, MaskJSON): a text masked
 	// before has the known values it had then (sentKnownSpans)
-	sent bool
+	sent  bool
+	field string // the tool's field name, for contextual credential rules
 }
 
 // covers says o masks what a rule of category cat finds: "" are the
@@ -684,6 +685,12 @@ func Mask(s string, o Options) (string, int) {
 	return mask(s, withModel(o, []string{s}), o.put(), false)
 }
 
+// MaskField keeps a tool result's field name available to credential rules.
+func MaskField(field, s string, o Options) (string, int) {
+	o.field = field
+	return Mask(s, o)
+}
+
 // Preview is Mask with nothing remembered: each value goes as the
 // placeholder, or with Options.Shape the made-up key, it would have, which
 // isn't kept for Restore or as a value seen before (known.go).
@@ -821,10 +828,41 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 	} else {
 		found = append(found, knownSpans(s, o)...)
 	}
+	found = noNumbers(s, noIDs(s, found))
+	found = append(found, fieldSpans(s, o)...)
 	if escaped {
 		found = outsideEscapes(raw, found)
 	}
-	return apply(raw, noNumbers(s, noIDs(s, found)), put, o)
+	return apply(raw, found, put, o)
+}
+
+func fieldSpans(s string, o Options) []span {
+	if !o.Secrets || o.field == "" {
+		return nil
+	}
+	prefix := o.field + "="
+	context := prefix + s
+	var found []span
+	for _, r := range rules {
+		if r.kind != "SECRET" {
+			continue
+		}
+		if len(r.markers) > 0 && !containsAny(o.field, r.markers) || len(r.fold) > 0 && !containsAny(lowerASCII(o.field), r.fold) {
+			continue
+		}
+		for _, m := range r.re.FindAllStringSubmatchIndex(context, -1) {
+			a, b := m[2], m[3]
+			if a >= len(prefix) && r.takes(context, a, b, r.ok) {
+				found = append(found, span{a, b, r.kind, r.by()})
+			}
+		}
+	}
+	found = noIDs(context, found)
+	for i := range found {
+		found[i].start -= len(prefix)
+		found[i].end -= len(prefix)
+	}
+	return found
 }
 
 // unescapedView is s, JSON text, as long as s and read as the vendor reads
