@@ -19,7 +19,7 @@ KEEPQUIET_HOME=/tmp/keepquiet-demo ./dist/keepquiet version
 printf 'sk-proj-not-a-real-key-0123456789abcdef\n' | KEEPQUIET_HOME=/tmp/keepquiet-demo ./dist/keepquiet mask
 ```
 
-第一行应打印 `0.1.0`。第二行应把密钥换成 `{{API_KEY_xxxxxxxx}}`。
+第一行应打印 `0.1.1`。第二行应把密钥换成 `{{API_KEY_xxxxxxxx}}`。
 
 下面三个脚本都会先把二进制装到 `~/.keepquiet/bin/keepquiet`，并在该目录写入默认 `config.json`（权限 0600）。你应看到 `installed ~/.keepquiet/bin/keepquiet (config: ~/.keepquiet/config.json)`。
 

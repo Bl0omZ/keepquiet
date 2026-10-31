@@ -1,6 +1,6 @@
 {
   "name": "pi-keepquiet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Forced local redaction for Pi (detection from yetone/magpie internal/redact, MIT)",
   "license": "MIT",
   "type": "module",

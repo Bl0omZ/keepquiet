@@ -1,6 +1,6 @@
 {
   "name": "keepquiet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Forced local redaction via hooks (detection vendored from yetone/magpie internal/redact, MIT)",
   "author": { "name": "Bl0omZ" },
   "license": "MIT"

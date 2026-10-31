@@ -12,7 +12,7 @@ import (
 	"github.com/bl0omz/keepquiet/internal/redact"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 func usage() {
 	fmt.Fprint(os.Stderr, `keepquiet `+version+` — local redaction for coding agents (detection: yetone/magpie internal/redact, MIT)
