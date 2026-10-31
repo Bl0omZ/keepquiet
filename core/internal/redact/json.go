@@ -50,6 +50,21 @@ func keepIn(path, key, s string, args, defs []string) bool {
 	return kept[key] || isID(key)
 }
 
+// opaqueKey says a key holds bytes a vendor sealed or encoded and checks as
+// they are. Host names are not replaced in them: a signature that changes
+// is a request the vendor turns away.
+func opaqueKey(key string) bool {
+	if key == "data" {
+		return true
+	}
+	for _, k := range signatureKeys {
+		if key == k {
+			return true
+		}
+	}
+	return false
+}
+
 // isID says a key holds an identifier the vendor matches against another:
 // a tool result's tool_call_id against its call's id, an approval's
 // approval_request_id against its request. A vendor's ids are its own
@@ -407,12 +422,27 @@ func MaskJSON(body []byte, o Options) ([]byte, int) {
 		return p
 	}
 	out, ok := walk(body, func(path, key, s string) string {
-		if !masked(path, key, s) {
+		if signed != nil && under(path, signed) {
+			return s
+		}
+		if strings.HasPrefix(s, "data:") {
 			return s
 		}
 		fieldOptions := o
 		fieldOptions.field = key
-		t, n := mask(s, fieldOptions, put, asJSON(key, ""))
+		if !keepIn(path, key, s, args, defs) {
+			t, n := mask(s, fieldOptions, put, asJSON(key, ""))
+			total += n
+			return t
+		}
+		// A kept field may still name a host the vendor must not see as
+		// it is. Replace hosts only: masking anything else here would
+		// change an id or a tool definition the vendor reads as structure.
+		if len(o.DomainReplacements) == 0 || opaqueKey(key) {
+			return s
+		}
+		hosts := Options{DomainReplacements: o.DomainReplacements, Seen: o.Seen}
+		t, n := mask(s, hosts, put, asJSON(key, ""))
 		total += n
 		return t
 	})
@@ -478,11 +508,17 @@ func asJSON(key, eventType string) bool {
 }
 
 // RestoreJSON puts the values back in a response body.
-func RestoreJSON(body []byte) []byte { return restoreJSON(body, nil) }
+func RestoreJSON(body []byte) []byte { return restoreJSON(body, nil, nil) }
 
-// restoreJSON is RestoreJSON, counting in put as restore does.
-func restoreJSON(body []byte, put map[string]int) []byte {
-	if !bytes.Contains(body, []byte("{{")) && !hasShapes(body) {
+// RestoreJSONDomains is RestoreJSON with the replaced hosts put back too.
+func RestoreJSONDomains(body []byte, domains []DomainReplacement) []byte {
+	return restoreJSON(body, nil, domains)
+}
+
+// restoreJSON is RestoreJSON, counting in put as restore does. domains,
+// where not empty, are put back in every string of the body.
+func restoreJSON(body []byte, put map[string]int, domains []DomainReplacement) []byte {
+	if len(domains) == 0 && !bytes.Contains(body, []byte("{{")) && !hasShapes(body) {
 		return body
 	}
 	typ := ""
@@ -490,10 +526,10 @@ func restoreJSON(body []byte, put map[string]int) []byte {
 		if path == "type" {
 			typ = s
 		}
-		return restore(s, asJSON(key, typ), put)
+		return restore(s, asJSON(key, typ), put, domains)
 	})
 	if !ok {
-		return []byte(restore(string(body), false, put))
+		return []byte(restore(string(body), false, put, domains))
 	}
 	return out
 }

@@ -171,14 +171,14 @@ func (rw *Writer) Finish() {
 	rw.done = true
 	switch rw.mode {
 	case whole:
-		rw.w.Write(restoreJSON(rw.buf.Bytes(), rw.count()))
+		rw.w.Write(restoreJSON(rw.buf.Bytes(), rw.count(), nil))
 	case stream:
 		if rw.pending != nil {
 			rw.w.Write(rw.pending.full)
 			rw.pending = nil
 		}
 		if rw.buf.Len() > 0 {
-			rw.w.Write([]byte(restore(rw.buf.String(), false, rw.count())))
+			rw.w.Write([]byte(restore(rw.buf.String(), false, rw.count(), nil)))
 		}
 	}
 	rw.Flush()
@@ -191,7 +191,7 @@ func (rw *Writer) event(ev []byte) error {
 		if err := rw.release(); err != nil {
 			return err
 		}
-		_, err := rw.w.Write([]byte(restore(string(ev), false, rw.count())))
+		_, err := rw.w.Write([]byte(restore(string(ev), false, rw.count(), nil)))
 		return err
 	}
 	ctx := name + "|" + eventCtx(data)
@@ -229,7 +229,7 @@ func (rw *Writer) event(ev []byte) error {
 		}
 		// counted here only: cut is s again without its tail, and
 		// whichever of the two goes out, the places are these
-		return restore(s, asJSON(key, typ), rw.count())
+		return restore(s, asJSON(key, typ), rw.count(), nil)
 	})
 	full := rebuild(pre, restored, post)
 	if tail == "" {

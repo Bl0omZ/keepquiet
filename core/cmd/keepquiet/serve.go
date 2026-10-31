@@ -78,6 +78,11 @@ func serveOne(e *engine, q serveReq) (resp map[string]any) {
 		if q.Op == "restore" {
 			if q.ToolName == "" || e.cfg.restoreToolInput() && !e.cfg.restoreDenied(q.ToolName) {
 				v, changed = e.restoreValue(v)
+			} else {
+				// A denied tool's vault placeholders stay masked, but its host
+				// is put back so the external request can run (availability
+				// first); the real host goes to the external service.
+				v, changed = e.restoreDomainValue(v)
 			}
 		} else {
 			v, changed = e.maskValue(v)

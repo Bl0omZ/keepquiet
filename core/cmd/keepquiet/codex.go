@@ -17,6 +17,12 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 		if len(e.hits) == 0 {
 			return nil, nil
 		}
+		// As for Claude Code: Codex cannot rewrite the prompt either, so a
+		// prompt with only a replaced host goes as written; anything else
+		// found still follows prompt=block/warn.
+		if !e.sensitiveHit() {
+			return nil, nil
+		}
 		if e.masked() == 0 || (e.cfg.Prompt == "warn" && !e.blocked()) {
 			return map[string]any{"systemMessage": "keepquiet: 提示词含敏感数据（" + e.summary() + "），按配置未拦截。"}, nil
 		}
@@ -30,21 +36,29 @@ func codexHook(event string, in hookInput) (map[string]any, error) {
 		}, nil
 
 	case "PreToolUse":
-		if !e.cfg.restoreToolInput() || e.cfg.restoreDenied(in.ToolName) || len(in.ToolInput) == 0 {
+		if len(in.ToolInput) == 0 {
 			return nil, nil
 		}
 		var v any
 		if err := decodeJSON(in.ToolInput, &v); err != nil {
 			return nil, err
 		}
-		nv, changed := e.restoreValue(v)
+		var nv any
+		var changed bool
+		if e.cfg.restoreToolInput() && !e.cfg.restoreDenied(in.ToolName) {
+			nv, changed = e.restoreValue(v)
+		} else {
+			// As for Claude Code: a denied tool gets its host back so the
+			// external call works, but never a vault placeholder.
+			nv, changed = e.restoreDomainValue(v)
+		}
 		if !changed {
 			return nil, nil
 		}
 		// Codex only honours updatedInput together with "allow"; in Codex
 		// that does not skip sandbox/approval checks (core registry.rs).
 		return map[string]any{"hookSpecificOutput": hso{"hookEventName": "PreToolUse",
-			"permissionDecision": "allow", "permissionDecisionReason": "keepquiet: 已在本地还原占位符",
+			"permissionDecision": "allow", "permissionDecisionReason": "keepquiet: 已在本地还原占位符或域名",
 			"updatedInput": nv}}, nil
 
 	case "PostToolUse":

@@ -24,6 +24,10 @@ type Config struct {
 	Rules        []redact.Rule     `json:"rules,omitempty"`
 	Actions      map[string]string `json:"actions,omitempty"`
 	Allow        []string          `json:"allow,omitempty"`
+	// DomainReplacements are hosts sent to a model as another host and put
+	// back on the local side. The default covers the organisation's own
+	// domains; an empty list turns the replacement off.
+	DomainReplacements []redact.DomainReplacement `json:"domainReplacements,omitempty"`
 
 	// ZhNames turns on magpie's rule-based Chinese name finder (zhname.go:
 	// a surname plus a cue such as 客户/我叫/…先生). In magpie it only runs
@@ -44,8 +48,10 @@ type Config struct {
 	// RestoreToolInput puts real values back into a tool call's input
 	// before the tool runs locally (default true).
 	RestoreToolInput *bool `json:"restoreToolInput,omitempty"`
-	// RestoreDenyTools are tools whose input is never restored (values
-	// would leave the machine through them).
+	// RestoreDenyTools are tools whose vault placeholders are never restored
+	// (values would leave the machine through them). A replaced host is still
+	// put back, the user's availability-first choice: the real host goes to
+	// the external service with the tool's request.
 	RestoreDenyTools []string `json:"restoreDenyTools,omitempty"`
 	// Claude-only knobs.
 	Claude struct {
@@ -60,9 +66,22 @@ type Config struct {
 
 func defaultConfig() Config {
 	c := Config{Secrets: true, Personal: true, Prompt: "block",
-		RestoreDenyTools: []string{"WebFetch", "WebSearch", "web_search", "web_fetch"}}
+		RestoreDenyTools:   []string{"WebFetch", "WebSearch", "web_search", "web_fetch"},
+		DomainReplacements: defaultDomainReplacements()}
 	c.Claude.PreToolDecision = "none"
 	return c
+}
+
+// defaultDomainReplacements is the organisation's hosts as they go out.
+// The order is the order matches are looked for; a host here is replaced
+// as a whole label, so alipay.com.cn is not alipay.com.
+func defaultDomainReplacements() []redact.DomainReplacement {
+	return []redact.DomainReplacement{
+		{From: "antgroup-inc.cn", To: "Xgroup-inc.cn"},
+		{From: "alipay.com", To: "Xpay.com"},
+		{From: "antfin.com", To: "Xfin.com"},
+		{From: "alibaba-inc.com", To: "Xbb-inc.com"},
+	}
 }
 
 func (c Config) restoreToolInput() bool { return c.RestoreToolInput == nil || *c.RestoreToolInput }
@@ -83,7 +102,8 @@ func (c Config) Options() redact.Options {
 	// Shape (made-up keys) and Model (local PII model) are not supported:
 	// see README "与 magpie 的差异".
 	o := redact.Options{Secrets: c.Secrets, Personal: c.Personal, Kinds: c.Kinds, Words: c.Words,
-		WordsAnyCase: c.WordsAnyCase, Rules: c.Rules, Actions: c.Actions, Allow: c.Allow}
+		WordsAnyCase: c.WordsAnyCase, Rules: c.Rules, Actions: c.Actions, Allow: c.Allow,
+		DomainReplacements: c.DomainReplacements}
 	if c.ZhNames {
 		o.Model = noModel
 	}
@@ -112,7 +132,9 @@ func (c Config) replaceFixed(s string) string {
 	})
 }
 
-func (c Config) enabled() bool { return c.Secrets || c.Personal || len(c.Words) > 0 }
+func (c Config) enabled() bool {
+	return c.Secrets || c.Personal || len(c.Words) > 0 || len(c.DomainReplacements) > 0
+}
 
 // homeDir is where config.json, redact.key, and vault.json live.
 // KEEPQUIET_HOME wins when it is set. Otherwise the directory is ~/.keepquiet.
@@ -194,7 +216,35 @@ func loadConfig() (Config, error) {
 			return c, fmt.Errorf("config: actions[%s] must be mask, warn or block", k)
 		}
 	}
+	for _, d := range c.DomainReplacements {
+		if !validHost(d.From) || !validHost(d.To) {
+			return c, fmt.Errorf("config: domainReplacements: from and to must be host names, not %q -> %q", d.From, d.To)
+		}
+		if strings.EqualFold(d.From, d.To) {
+			return c, fmt.Errorf("config: domainReplacements: %s replaces itself", d.From)
+		}
+	}
 	return c, nil
+}
+
+// validHost says s is a host name safe to look for as a whole label: ASCII
+// letters, digits and hyphens, at least two labels, no empty label.
+func validHost(s string) bool {
+	if s == "" || len(s) > 253 || !strings.Contains(s, ".") {
+		return false
+	}
+	for _, label := range strings.Split(s, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func knownCategory(id string) bool {

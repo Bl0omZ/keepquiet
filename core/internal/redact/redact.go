@@ -34,6 +34,15 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+// DomainReplacement sends a host as another one on the way out: alipay.com
+// in text, a URL or an email's domain goes as Xpay.com. Matching is by
+// whole host labels, in any case; a longer host (alipay.com.cn) is left as
+// it is.
+type DomainReplacement struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 // Options says what to mask.
 type Options struct {
 	Secrets  bool     // API keys, private keys, tokens, passwords
@@ -61,6 +70,12 @@ type Options struct {
 	// Allow are values the user lets go as written, whichever finder finds
 	// them: each a whole value, in any case.
 	Allow []string
+	// DomainReplacements are host names a vendor must not see as they are.
+	// Each is swapped in text, URLs, subdomains and email domains, and put
+	// back by RestoreDomains on the agent's side. An email keeps its
+	// local-part: alice@alipay.com goes as alice@Xpay.com, never as an
+	// EMAIL placeholder, or the part before @ would be gone too.
+	DomainReplacements []DomainReplacement
 
 	// Seen, where set, is told of each value masked, warned of or blocked
 	Seen func(Hit)
@@ -599,18 +614,25 @@ type span struct {
 	start, end int
 	kind       string
 	by         string // which finder found it: one of the By constants
+	// replace, where set, is fixed text this span goes as instead of a
+	// placeholder (a DomainReplacement)
+	replace string
 }
 
 // Which finder found a value (Hit.By): magpie's rules, the user's own
 // rules, the user's words, the local model (with the Chinese names it
 // brings, which run only with it), or a value masked before (known.go).
 const (
-	ByRule  = "rule"
-	ByYours = "yours"
-	ByWord  = "word"
-	ByModel = "model"
-	ByKnown = "known"
+	ByRule   = "rule"
+	ByYours  = "yours"
+	ByWord   = "word"
+	ByModel  = "model"
+	ByKnown  = "known"
+	ByDomain = "domain"
 )
+
+// domainKind is the Hit kind of a replaced host: DOMAIN×n in a summary.
+const domainKind = "DOMAIN"
 
 // What is done with a value of a kind (Options.Actions) other than
 // masking it.
@@ -732,14 +754,14 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 		s = unescapedView(raw)
 		put = unescapedPut(put)
 	}
-	var found []span
+	found := domainSpans(s, o.DomainReplacements, false)
 	for _, w := range o.Words {
 		if w = strings.TrimSpace(w); len(w) < 2 {
 			continue
 		}
 		if o.WordsAnyCase {
 			for _, m := range anyCase(w).FindAllStringIndex(s, -1) {
-				found = append(found, span{m[0], m[1], "TERM", ByWord})
+				found = append(found, span{start: m[0], end: m[1], kind: "TERM", by: ByWord})
 			}
 			continue
 		}
@@ -748,7 +770,7 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 			if j < 0 {
 				break
 			}
-			found = append(found, span{i + j, i + j + len(w), "TERM", ByWord})
+			found = append(found, span{start: i + j, end: i + j + len(w), kind: "TERM", by: ByWord})
 			i += j + len(w)
 		}
 	}
@@ -783,12 +805,12 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 				took := false
 				for g, kind := range r.groups {
 					if a, b := m[2*g+2], m[2*g+3]; a >= 0 && r.takes(s, a, b, r.groupOK[g]) {
-						found = append(found, span{a, b, kind, r.by()})
+						found = append(found, span{start: a, end: b, kind: kind, by: r.by()})
 						took = true
 					}
 				}
 				if took {
-					split = append(split, span{m[2], m[1], "", ""})
+					split = append(split, span{start: m[2], end: m[1]})
 				}
 				continue
 			}
@@ -811,7 +833,13 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 				ok = nil
 			}
 			if r.takes(s, a, b, ok) {
-				found = append(found, span{a, b, r.kind, r.by()})
+				// The domain of one of these addresses is what goes, not
+				// the address: alice@alipay.com is alice@Xpay.com, not
+				// {{EMAIL_…}}. The span of the domain is in found already.
+				if r.kind == "EMAIL" && o.replacesEmailDomain(s[a:b]) {
+					continue
+				}
+				found = append(found, span{start: a, end: b, kind: r.kind, by: r.by()})
 			}
 		}
 	}
@@ -828,6 +856,12 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 	} else {
 		found = append(found, knownSpans(s, o)...)
 	}
+	// A value known from before the replacement, or found by the model, is
+	// the same address: keep its local-part too and let the domain span do
+	// the work.
+	found = slices.DeleteFunc(found, func(f span) bool {
+		return f.kind == "EMAIL" && o.replacesEmailDomain(s[f.start:f.end])
+	})
 	found = noNumbers(s, noIDs(s, found))
 	found = append(found, fieldSpans(s, o)...)
 	if escaped {
@@ -853,7 +887,7 @@ func fieldSpans(s string, o Options) []span {
 		for _, m := range r.re.FindAllStringSubmatchIndex(context, -1) {
 			a, b := m[2], m[3]
 			if a >= len(prefix) && r.takes(context, a, b, r.ok) {
-				found = append(found, span{a, b, r.kind, r.by()})
+				found = append(found, span{start: a, end: b, kind: r.kind, by: r.by()})
 			}
 		}
 	}
@@ -1107,6 +1141,119 @@ func lowerASCII(s string) string {
 	return string(b)
 }
 
+// domainSpans finds each configured host in s where it is a host of its
+// own: after @, /, a dot of a subdomain, or a quote, and not followed by a
+// label (alipay.com.cn) or a host character (myalipay.com). reverse finds
+// the replacement host instead, to put the real one back on the agent's
+// side.
+func domainSpans(s string, domains []DomainReplacement, reverse bool) []span {
+	if len(domains) == 0 || len(s) < 3 {
+		return nil
+	}
+	lower := ""
+	var out []span
+	for _, d := range domains {
+		from, to := d.From, d.To
+		if reverse {
+			from, to = to, from
+		}
+		if from == "" || to == "" {
+			continue
+		}
+		if lower == "" {
+			lower = lowerASCII(s)
+		}
+		needle := lowerASCII(from)
+		for i := 0; ; {
+			j := strings.Index(lower[i:], needle)
+			if j < 0 {
+				break
+			}
+			a := i + j
+			b := a + len(needle)
+			i = b
+			if !domainBounds(s, a, b) {
+				continue
+			}
+			out = append(out, span{start: a, end: b, kind: domainKind, by: ByDomain, replace: to})
+		}
+	}
+	return out
+}
+
+// domainBounds says s[a:b] is a whole host or a subdomain's suffix, not a
+// piece of a longer word or of a longer domain. A dot before it starts a
+// subdomain (api.alipay.com); a dot after it starts another label
+// (alipay.com.cn), and a host character on either side makes it a longer
+// name (myalipay.com).
+func domainBounds(s string, a, b int) bool {
+	hostByte := func(c byte) bool {
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_'
+	}
+	if a > 0 && s[a-1] != '.' && hostByte(s[a-1]) {
+		return false
+	}
+	if b < len(s) {
+		c := s[b]
+		if c == '.' {
+			return b+1 >= len(s) || !hostByte(s[b+1])
+		}
+		if hostByte(c) {
+			return false
+		}
+	}
+	return true
+}
+
+// replacesEmailDomain says v is an address whose host is one these domains
+// cover, as it is or as it goes out: its local-part stays and only the
+// domain is replaced. Masking the whole address would hide the local-part
+// and leave an EMAIL placeholder where alice@Xpay.com belongs.
+func (o Options) replacesEmailDomain(v string) bool {
+	at := strings.LastIndexByte(v, '@')
+	if at < 0 || at+1 == len(v) {
+		return false
+	}
+	host := lowerASCII(v[at+1:])
+	for _, d := range o.DomainReplacements {
+		for _, name := range []string{d.From, d.To} {
+			name = lowerASCII(name)
+			if name != "" && (host == name || strings.HasSuffix(host, "."+name)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ReverseDomains puts the real hosts back in s without restoring any
+// placeholder: RestoreDomains uses it before restoring values, and it tells
+// whether s names a host that goes out as another one.
+func ReverseDomains(s string, domains []DomainReplacement) string {
+	found := domainSpans(s, domains, true)
+	if len(found) == 0 {
+		return s
+	}
+	sort.SliceStable(found, func(i, j int) bool {
+		if found[i].start != found[j].start {
+			return found[i].start < found[j].start
+		}
+		return found[i].end > found[j].end
+	})
+	var b strings.Builder
+	last := 0
+	for _, f := range found {
+		if f.start < last {
+			continue
+		}
+		b.WriteString(s[last:f.start])
+		b.WriteString(f.replace)
+		last = f.end
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
 // takes says s[a:b] is a value r masks: nothing it may not touch beside
 // it, and its checks pass.
 func (r rule) takes(s string, a, b int, ok func(string) bool) bool {
@@ -1125,7 +1272,8 @@ func (r rule) takes(s string, a, b int, ok func(string) bool) bool {
 // apply swaps each of found in s for what put makes of its value, the
 // first and longest where they overlap, nothing inside a placeholder. A
 // value o allows is left as it is, and one of a kind o warns of is left
-// and told. o.Seen, where set, is told of each.
+// and told; a domain replacement is fixed text and neither can hold it
+// back. o.Seen, where set, is told of each.
 func apply(s string, found []span, put func(kind, v string) string, o Options) (string, int) {
 	if len(found) == 0 {
 		return s, 0
@@ -1157,6 +1305,17 @@ func apply(s string, found []span, put func(kind, v string) string, o Options) (
 		}
 		next = f.end
 		v := s[f.start:f.end]
+		if f.replace != "" {
+			b.WriteString(s[last:f.start])
+			b.WriteString(f.replace)
+			if o.Seen != nil {
+				h := Hit{Kind: f.kind, By: f.by}
+				h.Head, h.Len = Hint(f.kind, v)
+				o.Seen(h)
+			}
+			last, n = f.end, n+1
+			continue
+		}
 		if o.allows(v) {
 			continue
 		}
@@ -1218,11 +1377,22 @@ var placeholderBody = regexp.MustCompile(`[A-Za-z][A-Za-z0-9_]*_[A-Za-z2-7]{8}`)
 // braces, or changes the case. Any of those is put back too when what is
 // left names a placeholder this magpie made: its kind and the 8 of its
 // hash, which no other text has by chance (shensmart on Discord).
-func Restore(s string, escaped bool) string { return restore(s, escaped, nil) }
+func Restore(s string, escaped bool) string { return restore(s, escaped, nil, nil) }
+
+// RestoreDomains is Restore with the replaced hosts in domains put back:
+// alice@Xpay.com reads alice@alipay.com again locally, where the vendor
+// only ever saw the replacement.
+func RestoreDomains(s string, escaped bool, domains []DomainReplacement) string {
+	return restore(s, escaped, nil, domains)
+}
 
 // restore is Restore, counting in put, when it isn't nil, each
-// placeholder it put a value back for.
-func restore(s string, escaped bool, put map[string]int) string {
+// placeholder it put a value back for. domains, where not empty, are put
+// back before the placeholders.
+func restore(s string, escaped bool, put map[string]int, domains []DomainReplacement) string {
+	if len(domains) > 0 {
+		s = ReverseDomains(s, domains)
+	}
 	mu.RLock()
 	defer mu.RUnlock()
 	if len(values) == 0 {

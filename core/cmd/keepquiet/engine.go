@@ -71,16 +71,47 @@ func (e *engine) maskValue(v any) (any, bool) {
 	})
 }
 
-// restoreValue puts real values back in every string leaf.
+// restoreValue puts real values and hosts back in every string leaf.
 func (e *engine) restoreValue(v any) (any, bool) {
-	return mapStrings(v, "", func(_, s string) string { return redact.Restore(s, false) })
+	return mapStrings(v, "", func(_, s string) string {
+		return redact.RestoreDomains(s, false, e.cfg.DomainReplacements)
+	})
 }
 
-// masked counts hits that changed the text (warn hits are sent as written).
+// restoreDomainValue puts only the replaced hosts back: a tool whose input
+// must not carry secrets still needs the host it runs against. This is the
+// user's availability-first choice, and the real host does go to the
+// external tool service with the request.
+func (e *engine) restoreDomainValue(v any) (any, bool) {
+	return mapStrings(v, "", func(_, s string) string {
+		return redact.ReverseDomains(s, e.cfg.DomainReplacements)
+	})
+}
+
+// hasReplacedDomain says s names a host that goes out as another one.
+func (e *engine) hasReplacedDomain(s string) bool {
+	return redact.ReverseDomains(s, e.cfg.DomainReplacements) != s
+}
+
+// sensitiveHit says something other than a replaced host was found. A
+// prompt with only replaced hosts goes as written: UserPromptSubmit has no
+// updatedPrompt to carry the replacement, so the host cannot be hidden at
+// that stage (README "局限").
+func (e *engine) sensitiveHit() bool {
+	for _, h := range e.hits {
+		if h.By != redact.ByDomain {
+			return true
+		}
+	}
+	return false
+}
+
+// masked counts hits that put a placeholder in the text (warn hits are sent
+// as written, and a replaced host is fixed text with nothing to remember).
 func (e *engine) masked() int {
 	n := 0
 	for _, h := range e.hits {
-		if h.Action != redact.Warn {
+		if h.By != redact.ByDomain && h.Action != redact.Warn {
 			n++
 		}
 	}

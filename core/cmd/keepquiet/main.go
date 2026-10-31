@@ -94,7 +94,7 @@ func runText(op string) int {
 	case "mask-json":
 		os.Stdout.Write(e.maskJSON(in))
 	case "restore":
-		os.Stdout.WriteString(redact.Restore(string(in), false))
+		os.Stdout.WriteString(redact.RestoreDomains(string(in), false, e.cfg.DomainReplacements))
 		return 0
 	case "scan":
 		redact.Preview(string(in), e.opts())

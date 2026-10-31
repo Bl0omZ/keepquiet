@@ -164,7 +164,7 @@ func knownSpans(s string, o Options) []span {
 			best = &known[s[i:i+minKnown]][j]
 		}
 		if best != nil {
-			out = append(out, span{i, i + len(best.v), best.kind, ByKnown})
+			out = append(out, span{start: i, end: i + len(best.v), kind: best.kind, by: ByKnown})
 			i += len(best.v) - 1
 		}
 	}

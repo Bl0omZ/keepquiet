@@ -6,12 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
-            "args": [
-              "hook",
-              "claude",
-              "UserPromptSubmit"
-            ],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/run.sh\" hook claude UserPromptSubmit",
             "timeout": 60,
             "onFailure": "block"
           }
@@ -23,12 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
-            "args": [
-              "hook",
-              "claude",
-              "PreToolUse"
-            ],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/run.sh\" hook claude PreToolUse",
             "timeout": 60,
             "onFailure": "block"
           }
@@ -41,12 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
-            "args": [
-              "hook",
-              "claude",
-              "PostToolUse"
-            ],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/run.sh\" hook claude PostToolUse",
             "timeout": 60,
             "onFailure": "block"
           }
@@ -59,12 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
-            "args": [
-              "hook",
-              "claude",
-              "MessageDisplay"
-            ],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/run.sh\" hook claude MessageDisplay",
             "timeout": 10
           }
         ]

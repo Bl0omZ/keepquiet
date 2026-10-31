@@ -70,6 +70,12 @@ Pi 在下一次请求或还原操作时读取最新配置，无需重启。
   ],
   "actions": { "EMAIL": "warn", "PRIVATE_KEY": "block" },
   "allow": ["sk-public-demo"],
+  "domainReplacements": [
+    { "from": "antgroup-inc.cn", "to": "Xgroup-inc.cn" },
+    { "from": "alipay.com", "to": "Xpay.com" },
+    { "from": "antfin.com", "to": "Xfin.com" },
+    { "from": "alibaba-inc.com", "to": "Xbb-inc.com" }
+  ],
   "zhNames": true,
   "replace": { "EMAIL": "[邮箱已隐藏]" },
   "prompt": "block",
@@ -84,12 +90,13 @@ Pi 在下一次请求或还原操作时读取最新配置，无需重启。
 | `secrets` / `personal` | 密钥与个人信息总开关。EMAIL、PHONE、ID_CARD、BANK_CARD 随 `personal` 开启，不能单独写进 `kinds`。 |
 | `kinds` | 类别 ID，仅允许 `ssn` `passport` `iban` `birthday` `mac` `serial` `home` `userhost` `ip` `bucket`。写 `PHONE` 会报错。不想脱敏某一类时用 `actions`。`ip` 会跳过内网、回环和常见公共 DNS。 |
 | `words` / `wordsAnyCase` / `allow` | 关键词黑名单（命中变为 `TERM`）与白名单（永不脱敏）。 |
+| `domainReplacements` | 出站时按数组顺序替换的主机名及子域，默认是上例四个。只匹配完整域名标签，`alipay.com.cn` 不会被当成 `alipay.com`。邮箱只替换 `@` 后面的域名，保留 local-part，例如 `alice@alipay.com` 变为 `alice@Xpay.com`，不会变成 `EMAIL` 占位符。未命中 `restoreDenyTools` 的本机工具输入、`restore` 和 `MessageDisplay` 会完整还原；`restoreDenyTools` 中的外部工具只还原配置域名、不还原 vault 占位符（可用优先，真实域名会发给外部工具服务）；写空数组可关闭。提示词阶段的 `UserPromptSubmit` 不能改写提示词，只命中域名的提示会按原文放行（见“局限”）；域名与其他敏感项同时出现时，仍按其他项的 `prompt` 策略处理。 |
 | `rules` | 最多 32 条，每条写 `prefix` 或 `regex`（RE2）。`prefix` 长 3-64，后面至少 8 个 `[A-Za-z0-9_-]`。`regex` 不超过 300 字符，有捕获组时只替换第 1 组。 |
 | `actions` | `mask`（默认）、`warn`（放行并提示）、`block`（脱敏并停止本轮）。工具输出命中 `block` 时，工具已发生的副作用不会撤销。 |
 | `zhNames` | 默认关闭。打开后启用规则式中文姓名识别。不识别英文人名。 |
 | `replace` | 把某类占位符换成固定文字。单向，不能还原。只对 Claude Code 与 Codex 生效。Pi 仍用占位符。 |
-| `prompt` | 提示词含敏感数据时：`block`（默认）或 `warn`。只对 Claude Code 与 Codex 有效。 |
-| `restoreToolInput` / `restoreDenyTools` | 工具执行前是否还原真值，以及永不还原的工具名。 |
+| `prompt` | 提示词含域名以外的敏感数据时：`block`（默认）或 `warn`。只对 Claude Code 与 Codex 有效；只含域名替换的提示无法在该阶段隐藏，按原文放行。 |
+| `restoreToolInput` / `restoreDenyTools` | 工具执行前是否还原真值，以及永不还原敏感值的工具名。名单中的工具只还原配置域名，不还原密钥/个人信息占位符；这是可用优先的取舍，真实域名会发送给外部工具服务。未命中名单的本地工具完整还原。 |
 | `claude.preToolDecision` | 与 `updatedInput` 一起返回的权限决定：`none`（默认）、`ask`、`allow`。非交互 `-p` 下 `ask` 会拒工具。 |
 | `claude.displayRestore` | `MessageDisplay` 是否把占位符还原给你看。 |
 
@@ -99,8 +106,8 @@ Pi 在下一次请求或还原操作时读取最新配置，无需重启。
 
 | Agent | 提示词 | 工具输入 | 工具输出 | hook 失败 |
 |---|---|---|---|---|
-| Claude Code | 拦截，不能改写 | `PreToolUse` 本地还原 | `PostToolUse` 改写为占位符 | fail-closed（`onFailure: block`） |
-| Codex CLI | 拦截，不能改写 | `PreToolUse` 本地还原 | 不能改写输出，用已脱敏的 `block.reason` 交给模型 | 二进制缺失或进程被杀时 fail-open |
+| Claude Code | 敏感项拦截，不能改写；仅域名放行 | `PreToolUse` 本地还原（deny 名单仅域名） | `PostToolUse` 改写为占位符 | fail-closed（`onFailure: block`） |
+| Codex CLI | 敏感项拦截，不能改写；仅域名放行 | `PreToolUse` 本地还原（deny 名单仅域名） | 不能改写输出，用已脱敏的 `block.reason` 交给模型 | 二进制缺失或进程被杀时 fail-open |
 | Pi | 直接改写整个请求 | `tool_call` 还原 | 请求发出前已 `MaskJSON` | fail-closed（`ctx.abort()`） |
 
 Claude 的 `MessageDisplay` 与 Pi 的 `message_end` 只影响本机显示和会话，不会把真值发回模型。同一值总是得到同一占位符（HMAC-SHA256，密钥在 `redact.key`）。映射写在 `vault.json`，权限 0600。
@@ -129,7 +136,7 @@ keepquiet version
 
 ## 局限
 
-1. Claude Code 与 Codex 不能改写提示词，只能拦截。被拦的提示不会发给模型，但 Claude Code 仍可能把它写入本地 transcript。
+1. Claude Code 与 Codex 不能改写提示词，只能拦截。被拦的提示不会发给模型，但 Claude Code 仍可能把它写入本地 transcript。`UserPromptSubmit` 没有 `updatedPrompt`，域名替换在提示词阶段无法生效：只含域名的提示会按原文放行，不会隐藏域名；不要再在提示词里写内部域名。域名与敏感项同时出现时仍按 `prompt` 策略处理。
 2. Claude / Codex 的 hook 不覆盖系统提示、`CLAUDE.md` / `AGENTS.md`、`@文件`、图片、托管工具。不要把密钥写进这些位置。Pi 改写整个 payload，没有这个缺口。
 3. Codex 在二进制缺失或进程被系统杀掉时 fail-open，密钥会原样发出。keepquiet 自己会接住内部错误并输出 block。
 4. Claude Code 的 `PostToolUseFailure` 不能改写，失败工具的报错可能含原文。
@@ -137,6 +144,8 @@ keepquiet version
 6. `vault.json` 是明文映射。退出所有 Pi / `keepquiet serve` 进程后，用 `keepquiet vault clear` 清空；有常驻进程时命令会拒绝清理。清空后旧占位符无法还原。自行保护 `~/.keepquiet/`。
 7. `example.com` 等保留域名的邮箱不会被脱敏。规则会漏报也会误报。
 8. 工具输入中的占位符按原文还原，不解析 shell、SQL 或生成文件的语法。原文含引号、换行等字符时，优先让工具通过独立参数、环境变量或文件引用使用该值。
+9. 带签名或加密的 thinking / reasoning 块按厂商原文逐字节保留，不参与域名替换；签名内容本身通常不可读，但不要依赖这些块隐藏域名。
+10. `restoreDenyTools` 采用可用优先的边界：命中的外部工具（默认 `WebFetch`、`WebSearch` 等）只还原 `domainReplacements` 配置的真实域名，以便外部请求能正常访问；vault 中的密钥和个人信息占位符仍保持不还原。真实域名会随请求发送给外部工具服务。
 
 ## 开发验证
 

@@ -23,18 +23,26 @@ type hso = map[string]any
 // print (nil for none). err means it could not decide; the caller turns
 // that into the event's fail-closed answer.
 func claudeHook(event string, in hookInput) (map[string]any, error) {
-	// Every restorable placeholder contains an underscore.
-	if event == "MessageDisplay" && !strings.Contains(in.Delta, "_") {
-		return nil, nil
-	}
 	e, err := newEngine()
 	if err != nil {
 		return nil, err
 	}
+	// Every restorable placeholder contains an underscore; a replaced
+	// host does not, so a delta with neither has nothing to do.
+	if event == "MessageDisplay" && !strings.Contains(in.Delta, "_") && !e.hasReplacedDomain(in.Delta) {
+		return nil, nil
+	}
 	switch event {
 	case "UserPromptSubmit":
 		masked := e.maskText(in.Prompt)
-		if e.masked() == 0 && len(e.hits) == 0 {
+		if len(e.hits) == 0 {
+			return nil, nil
+		}
+		// There is no updatedPrompt: the prompt goes as written or is
+		// blocked. A prompt whose only finding is a replaced host goes as
+		// written, host and all (README "局限"); anything else found still
+		// follows prompt=block/warn.
+		if !e.sensitiveHit() {
 			return nil, nil
 		}
 		if e.masked() == 0 || (e.cfg.Prompt == "warn" && !e.blocked()) {
@@ -51,21 +59,30 @@ func claudeHook(event string, in hookInput) (map[string]any, error) {
 		}, nil
 
 	case "PreToolUse":
-		if !e.cfg.restoreToolInput() || e.cfg.restoreDenied(in.ToolName) || len(in.ToolInput) == 0 {
+		if len(in.ToolInput) == 0 {
 			return nil, nil
 		}
 		var v any
 		if err := decodeJSON(in.ToolInput, &v); err != nil {
 			return nil, err
 		}
-		nv, changed := e.restoreValue(v)
+		var nv any
+		var changed bool
+		if e.cfg.restoreToolInput() && !e.cfg.restoreDenied(in.ToolName) {
+			nv, changed = e.restoreValue(v)
+		} else {
+			// Availability first for a denied tool: its host is put back so
+			// a fetch or remote search can run, but every vault placeholder
+			// stays masked. The real host goes to the external service.
+			nv, changed = e.restoreDomainValue(v)
+		}
 		if !changed {
 			return nil, nil
 		}
 		out := hso{"hookEventName": "PreToolUse", "updatedInput": nv}
 		if d := e.cfg.Claude.PreToolDecision; d != "none" {
 			out["permissionDecision"] = d
-			out["permissionDecisionReason"] = "keepquiet: 已在本地还原工具参数中的占位符"
+			out["permissionDecisionReason"] = "keepquiet: 已在本地还原工具参数中的占位符或域名"
 		}
 		return map[string]any{"hookSpecificOutput": out}, nil
 
