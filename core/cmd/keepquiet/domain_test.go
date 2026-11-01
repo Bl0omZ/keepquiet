@@ -12,37 +12,36 @@ import (
 	"testing"
 )
 
-// TestDefaultDomainReplacements pins the four hosts and their order.
+// fixtureDomains is the fictional host map a test puts in its config when
+// it expects replacement. It is not the default.
+const fixtureDomains = `"domainReplacements":[{"from":"northwind.cn","to":"harbor.cn"},{"from":"contoso.com","to":"lumen.com"},{"from":"fabrikam.net","to":"cedar.net"},{"from":"adventure-works.io","to":"ridge-works.io"}]`
+
+// TestDefaultDomainReplacements pins that replacement is off until a local
+// config sets hosts.
 func TestDefaultDomainReplacements(t *testing.T) {
-	want := []struct{ from, to string }{
-		{"antgroup-inc.cn", "Xgroup-inc.cn"},
-		{"alipay.com", "Xpay.com"},
-		{"antfin.com", "Xfin.com"},
-		{"alibaba-inc.com", "Xbb-inc.com"},
-	}
 	c := defaultConfig()
-	if len(c.DomainReplacements) != len(want) {
+	if len(c.DomainReplacements) != 0 {
 		t.Fatalf("default domains: %s", dump(c.DomainReplacements))
 	}
-	for i, w := range want {
-		d := c.DomainReplacements[i]
-		if d.From != w.from || d.To != w.to {
-			t.Fatalf("domain %d = %s, want %s -> %s", i, dump(d), w.from, w.to)
-		}
-	}
 
-	// An old config without the field keeps the default.
+	// A config that omits the field loads with no replacements, so a host
+	// is left as written.
 	writeConfig(t, `{"secrets":true}`)
 	got, err := loadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Options().DomainReplacements) != len(want) {
-		t.Fatalf("old config lost default domains: %s", dump(got.DomainReplacements))
+	if len(got.Options().DomainReplacements) != 0 {
+		t.Fatalf("omitted field loaded domains: %s", dump(got.DomainReplacements))
+	}
+	if e, err := newEngine(); err != nil {
+		t.Fatal(err)
+	} else if masked := e.maskText("https://contoso.com/x"); masked != "https://contoso.com/x" {
+		t.Fatalf("default config replaced a host: %q", masked)
 	}
 
 	// A new field still has to be a host map, not a loose string swap.
-	writeConfig(t, `{"domainReplacements":[{"from":"alipay.com","to":"not a host"}]}`)
+	writeConfig(t, `{"domainReplacements":[{"from":"contoso.com","to":"not a host"}]}`)
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("accepted an invalid replacement host")
 	}
@@ -51,8 +50,8 @@ func TestDefaultDomainReplacements(t *testing.T) {
 	writeConfig(t, `{"secrets":true,"domainReplacements":[]}`)
 	if e, err := newEngine(); err != nil {
 		t.Fatal(err)
-	} else if got := e.maskText("https://alipay.com/x"); got != "https://alipay.com/x" {
-		t.Fatalf("empty domainReplacements still replaced: %q", got)
+	} else if masked := e.maskText("https://contoso.com/x"); masked != "https://contoso.com/x" {
+		t.Fatalf("empty domainReplacements still replaced: %q", masked)
 	}
 }
 
@@ -61,12 +60,12 @@ func TestDefaultDomainReplacements(t *testing.T) {
 // written, for both agents and either prompt policy. The host is not
 // hidden at this stage (README "局限").
 func TestDomainOnlyPromptPasses(t *testing.T) {
-	for _, cfg := range []string{`{"secrets":true}`, `{"secrets":true,"prompt":"warn"}`} {
+	for _, cfg := range []string{`{"secrets":true,` + fixtureDomains + `}`, `{"secrets":true,"prompt":"warn",` + fixtureDomains + `}`} {
 		writeConfig(t, cfg)
 		for _, agent := range []string{"claude", "codex"} {
 			for _, prompt := range []string{
-				"please open https://alipay.com/x",
-				"antgroup-inc.cn and api.alipay.com and antfin.com and alibaba-inc.com",
+				"please open https://contoso.com/x",
+				"northwind.cn and api.contoso.com and fabrikam.net and adventure-works.io",
 			} {
 				if out, code := hook(t, agent, "UserPromptSubmit", map[string]any{"prompt": prompt}); code != 0 || out != nil {
 					t.Fatalf("%s %s: a domain-only prompt must pass as written: %d %s", cfg, agent, code, dump(out))
@@ -76,9 +75,9 @@ func TestDomainOnlyPromptPasses(t *testing.T) {
 	}
 
 	// A prompt with nothing to replace is not held back, and a longer
-	// domain that only starts with alipay.com is not one.
-	writeConfig(t, `{"secrets":true}`)
-	for _, prompt := range []string{"hello, how are you?", "open https://alipay.com.cn/x"} {
+	// domain that only starts with contoso.com is not one.
+	writeConfig(t, `{"secrets":true,`+fixtureDomains+`}`)
+	for _, prompt := range []string{"hello, how are you?", "open https://contoso.com.cn/x"} {
 		if out, code := hook(t, "claude", "UserPromptSubmit", map[string]any{"prompt": prompt}); code != 0 || out != nil {
 			t.Fatalf("clean prompt %q blocked: %d %s", prompt, code, dump(out))
 		}
@@ -91,12 +90,12 @@ func TestDomainOnlyPromptPasses(t *testing.T) {
 func TestDomainPromptSavesNothing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("KEEPQUIET_HOME", home)
-	writeConfig(t, `{"secrets":true}`)
+	writeConfig(t, `{"secrets":true,`+fixtureDomains+`}`)
 	e, err := newEngine()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := e.maskText("open https://alipay.com/x for alice@alipay.com"); got != "open https://Xpay.com/x for alice@Xpay.com" {
+	if got := e.maskText("open https://contoso.com/x for alice@contoso.com"); got != "open https://lumen.com/x for alice@lumen.com" {
 		t.Fatalf("maskText = %q", got)
 	}
 	if len(e.hits) != 2 || e.masked() != 0 || e.sensitiveHit() {
@@ -115,20 +114,20 @@ func TestDomainPromptSavesNothing(t *testing.T) {
 func TestDomainWithSensitivePromptFollowsPromptPolicy(t *testing.T) {
 	for _, agent := range []string{"claude", "codex"} {
 		t.Run(agent, func(t *testing.T) {
-			writeConfig(t, `{"secrets":true}`)
+			writeConfig(t, `{"secrets":true,`+fixtureDomains+`}`)
 			out, code := hook(t, agent, "UserPromptSubmit", map[string]any{
-				"prompt": "key " + fakeKey + " for https://alipay.com/x",
+				"prompt": "key " + fakeKey + " for https://contoso.com/x",
 			})
 			s := dump(out)
-			if code != 0 || out["decision"] != "block" || strings.Contains(s, fakeKey) || strings.Contains(s, "alipay.com") || !strings.Contains(s, "Xpay.com") || !phRe.MatchString(s) {
+			if code != 0 || out["decision"] != "block" || strings.Contains(s, fakeKey) || strings.Contains(s, "contoso.com") || !strings.Contains(s, "lumen.com") || !phRe.MatchString(s) {
 				t.Fatalf("%s: a key with a replaced host must still block on the key: %d %s", agent, code, s)
 			}
 
 			// prompt=warn still lets the key through as written; the host
 			// does not keep it blocked.
-			writeConfig(t, `{"secrets":true,"prompt":"warn"}`)
+			writeConfig(t, `{"secrets":true,"prompt":"warn",`+fixtureDomains+`}`)
 			out, code = hook(t, agent, "UserPromptSubmit", map[string]any{
-				"prompt": "key " + fakeKey + " for https://alipay.com/x",
+				"prompt": "key " + fakeKey + " for https://contoso.com/x",
 			})
 			if code != 0 || out["decision"] != nil || out["systemMessage"] == nil || strings.Contains(dump(out), fakeKey) {
 				t.Fatalf("%s: prompt=warn must warn on the key, not block on the host: %d %s", agent, code, dump(out))
@@ -136,9 +135,9 @@ func TestDomainWithSensitivePromptFollowsPromptPolicy(t *testing.T) {
 
 			// A warn action with the default prompt=block warns as it did
 			// before; the host does not turn it into a block.
-			writeConfig(t, `{"personal":true,"actions":{"EMAIL":"warn"}}`)
+			writeConfig(t, `{"personal":true,"actions":{"EMAIL":"warn"},`+fixtureDomains+`}`)
 			out, code = hook(t, agent, "UserPromptSubmit", map[string]any{
-				"prompt": "mail bob@gmail.com about https://alipay.com/x",
+				"prompt": "mail bob@gmail.com about https://contoso.com/x",
 			})
 			if code != 0 || out["decision"] != nil || out["systemMessage"] == nil || strings.Contains(dump(out), "bob@gmail.com") {
 				t.Fatalf("%s: a warn email with a replaced host must warn, not block: %d %s", agent, code, dump(out))
@@ -148,46 +147,46 @@ func TestDomainWithSensitivePromptFollowsPromptPolicy(t *testing.T) {
 }
 
 func TestClaudeDomainToolAndDisplayRoundTrip(t *testing.T) {
-	writeConfig(t, `{"secrets":true,"personal":true}`)
+	writeConfig(t, `{"secrets":true,"personal":true,`+fixtureDomains+`}`)
 	out, code := hook(t, "claude", "PostToolUse", map[string]any{
 		"tool_name": "Bash",
 		"tool_response": map[string]any{
-			"stdout": "see https://api.alipay.com/x and alice@alipay.com",
+			"stdout": "see https://api.contoso.com/x and alice@contoso.com",
 		},
 	})
 	s := dump(out)
-	if code != 0 || strings.Contains(s, "alipay.com") || !strings.Contains(s, "api.Xpay.com") || !strings.Contains(s, "alice@Xpay.com") {
+	if code != 0 || strings.Contains(s, "contoso.com") || !strings.Contains(s, "api.lumen.com") || !strings.Contains(s, "alice@lumen.com") {
 		t.Fatalf("tool output not replaced by host: %d %s", code, s)
 	}
 
 	out, _ = hook(t, "claude", "PreToolUse", map[string]any{
 		"tool_name":  "Bash",
-		"tool_input": map[string]any{"command": "curl https://api.Xpay.com/x"},
+		"tool_input": map[string]any{"command": "curl https://api.lumen.com/x"},
 	})
 	cmd := out["hookSpecificOutput"].(map[string]any)["updatedInput"].(map[string]any)["command"]
-	if cmd != "curl https://api.alipay.com/x" {
+	if cmd != "curl https://api.contoso.com/x" {
 		t.Fatalf("tool input host not restored locally: %s", dump(out))
 	}
 
-	out, _ = hook(t, "claude", "MessageDisplay", map[string]any{"delta": "visit https://api.Xpay.com/x"})
+	out, _ = hook(t, "claude", "MessageDisplay", map[string]any{"delta": "visit https://api.lumen.com/x"})
 	got := out["hookSpecificOutput"].(map[string]any)["displayContent"]
-	if got != "visit https://api.alipay.com/x" {
+	if got != "visit https://api.contoso.com/x" {
 		t.Fatalf("display host not restored: %s", dump(out))
 	}
 }
 
 func TestDeniedToolRestoresHostButKeepsSecretPlaceholder(t *testing.T) {
-	writeConfig(t, `{"secrets":true,"personal":true}`)
+	writeConfig(t, `{"secrets":true,"personal":true,`+fixtureDomains+`}`)
 	p := maskedPlaceholder(t)
 	for _, agent := range []string{"claude", "codex"} {
 		for _, tool := range []string{"WebFetch", "WebSearch", "web_fetch", "web_search"} {
 			out, _ := hook(t, agent, "PreToolUse", map[string]any{
 				"tool_name":  tool,
-				"tool_input": map[string]any{"url": "https://api.Xpay.com/?key=" + p},
+				"tool_input": map[string]any{"url": "https://api.lumen.com/?key=" + p},
 			})
 			h := out["hookSpecificOutput"].(map[string]any)
 			url := h["updatedInput"].(map[string]any)["url"]
-			if url != "https://api.alipay.com/?key="+p {
+			if url != "https://api.contoso.com/?key="+p {
 				t.Fatalf("%s %s: want the host restored and the secret still a placeholder, got %s", agent, tool, dump(out))
 			}
 		}
@@ -195,10 +194,10 @@ func TestDeniedToolRestoresHostButKeepsSecretPlaceholder(t *testing.T) {
 		// secret and the host.
 		out, _ := hook(t, agent, "PreToolUse", map[string]any{
 			"tool_name":  "Bash",
-			"tool_input": map[string]any{"command": "curl https://api.Xpay.com/?key=" + p},
+			"tool_input": map[string]any{"command": "curl https://api.lumen.com/?key=" + p},
 		})
 		cmd := out["hookSpecificOutput"].(map[string]any)["updatedInput"].(map[string]any)["command"]
-		if cmd != "curl https://api.alipay.com/?key="+fakeKey {
+		if cmd != "curl https://api.contoso.com/?key="+fakeKey {
 			t.Fatalf("%s: a local tool must restore host and secret, got %s", agent, dump(out))
 		}
 	}
@@ -208,14 +207,14 @@ func TestDeniedToolRestoresHostButKeepsSecretPlaceholder(t *testing.T) {
 // applies the same availability-first rule, and no tool name (display
 // restore) still restores everything.
 func TestServeDeniedToolRestoresHostButKeepsSecretPlaceholder(t *testing.T) {
-	writeConfig(t, `{"secrets":true,"personal":true}`)
+	writeConfig(t, `{"secrets":true,"personal":true,`+fixtureDomains+`}`)
 	p := maskedPlaceholder(t)
-	value := `{"url":"https://api.Xpay.com/?key=` + p + `"}`
+	value := `{"url":"https://api.lumen.com/?key=` + p + `"}`
 	for _, c := range []struct {
 		tool, want string
 	}{
-		{"web_fetch", `"url":"https://api.alipay.com/?key=` + p + `"`},
-		{"bash", `"url":"https://api.alipay.com/?key=` + fakeKey + `"`},
+		{"web_fetch", `"url":"https://api.contoso.com/?key=` + p + `"`},
+		{"bash", `"url":"https://api.contoso.com/?key=` + fakeKey + `"`},
 	} {
 		req := `{"id":1,"op":"restore","toolName":"` + c.tool + `","value":` + value + `}` + "\n"
 		var w bytes.Buffer
@@ -230,17 +229,17 @@ func TestServeDeniedToolRestoresHostButKeepsSecretPlaceholder(t *testing.T) {
 	if err := serve(strings.NewReader(`{"id":2,"op":"restore","value":`+value+`}`+"\n"), &w); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(w.String(), `"url":"https://api.alipay.com/?key=`+fakeKey+`"`) {
+	if !strings.Contains(w.String(), `"url":"https://api.contoso.com/?key=`+fakeKey+`"`) {
 		t.Fatalf("display restore must put both back: %s", w.String())
 	}
 }
 
 func TestRestoreCommandPutsDomainsBack(t *testing.T) {
-	writeConfig(t, `{"secrets":true}`)
-	if got := runTextWithIO(t, "restore", "open https://api.Xpay.com and mail alice@Xpay.com"); got != "open https://api.alipay.com and mail alice@alipay.com" {
+	writeConfig(t, `{"secrets":true,`+fixtureDomains+`}`)
+	if got := runTextWithIO(t, "restore", "open https://api.lumen.com and mail alice@lumen.com"); got != "open https://api.contoso.com and mail alice@contoso.com" {
 		t.Fatalf("restore command = %q", got)
 	}
-	if got := runTextWithIO(t, "mask", "open https://api.alipay.com and mail alice@alipay.com"); strings.Contains(got, "alipay.com") || !strings.Contains(got, "alice@Xpay.com") {
+	if got := runTextWithIO(t, "mask", "open https://api.contoso.com and mail alice@contoso.com"); strings.Contains(got, "contoso.com") || !strings.Contains(got, "alice@lumen.com") {
 		t.Fatalf("mask command = %q", got)
 	}
 }

@@ -24,9 +24,10 @@ type Config struct {
 	Rules        []redact.Rule     `json:"rules,omitempty"`
 	Actions      map[string]string `json:"actions,omitempty"`
 	Allow        []string          `json:"allow,omitempty"`
-	// DomainReplacements are hosts sent to a model as another host and put
-	// back on the local side. The default covers the organisation's own
-	// domains; an empty list turns the replacement off.
+	// DomainReplacements are optional hosts sent to a model as another host
+	// and put back on the local side. Empty by default; hosts are configured
+	// only in the user's local config. An omitted field and an empty list
+	// both mean off.
 	DomainReplacements []redact.DomainReplacement `json:"domainReplacements,omitempty"`
 
 	// ZhNames turns on magpie's rule-based Chinese name finder (zhname.go:
@@ -66,22 +67,9 @@ type Config struct {
 
 func defaultConfig() Config {
 	c := Config{Secrets: true, Personal: true, Prompt: "block",
-		RestoreDenyTools:   []string{"WebFetch", "WebSearch", "web_search", "web_fetch"},
-		DomainReplacements: defaultDomainReplacements()}
+		RestoreDenyTools: []string{"WebFetch", "WebSearch", "web_search", "web_fetch"}}
 	c.Claude.PreToolDecision = "none"
 	return c
-}
-
-// defaultDomainReplacements is the organisation's hosts as they go out.
-// The order is the order matches are looked for; a host here is replaced
-// as a whole label, so alipay.com.cn is not alipay.com.
-func defaultDomainReplacements() []redact.DomainReplacement {
-	return []redact.DomainReplacement{
-		{From: "antgroup-inc.cn", To: "Xgroup-inc.cn"},
-		{From: "alipay.com", To: "Xpay.com"},
-		{From: "antfin.com", To: "Xfin.com"},
-		{From: "alibaba-inc.com", To: "Xbb-inc.com"},
-	}
 }
 
 func (c Config) restoreToolInput() bool { return c.RestoreToolInput == nil || *c.RestoreToolInput }
