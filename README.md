@@ -108,12 +108,6 @@ Pi 扩展按以下顺序查找二进制文件：先读环境变量 `KEEPQUIET_BI
 {
 	"secrets": true,
 	"personal": true,
-	"domainReplacements": [
-		{ "from": "antgroup-inc.cn", "to": "Xgroup-inc.cn" },
-		{ "from": "alipay.com", "to": "Xpay.com" },
-		{ "from": "antfin.com", "to": "Xfin.com" },
-		{ "from": "alibaba-inc.com", "to": "Xbb-inc.com" }
-	],
 	"prompt": "block",
 	"restoreDenyTools": ["WebFetch", "WebSearch", "web_search", "web_fetch"],
 	"claude": { "preToolDecision": "none" }
@@ -139,10 +133,7 @@ Pi 扩展按以下顺序查找二进制文件：先读环境变量 `KEEPQUIET_BI
 	"actions": { "EMAIL": "warn", "PRIVATE_KEY": "block" },
 	"allow": ["sk-public-demo"],
 	"domainReplacements": [
-		{ "from": "antgroup-inc.cn", "to": "Xgroup-inc.cn" },
-		{ "from": "alipay.com", "to": "Xpay.com" },
-		{ "from": "antfin.com", "to": "Xfin.com" },
-		{ "from": "alibaba-inc.com", "to": "Xbb-inc.com" }
+		{ "from": "contoso.com", "to": "lumen.com" }
 	],
 	"zhNames": true,
 	"replace": { "EMAIL": "[邮箱已隐藏]" },
@@ -186,7 +177,7 @@ Pi 扩展按以下顺序查找二进制文件：先读环境变量 `KEEPQUIET_BI
 
 `domainReplacements`、`restoreToolInput` 和 `restoreDenyTools` 共同控制内部域名和敏感占位符在工具调用时的还原行为：
 
-- **出站域名替换。** `domainReplacements` 在出站时按数组顺序替换匹配的主机名及其子域名，默认包含上表中的 4 个内部域名，设为空数组 `[]` 可关闭。匹配遵循完整域名标签边界，因此 `alipay.com.cn` 不会被当成 `alipay.com` 替换。对于邮箱地址，只替换 `@` 后面的域名部分并保留用户名，例如 `alice@alipay.com` 会变成 `alice@Xpay.com`，而不会变成 `EMAIL` 占位符。
+- **出站域名替换。** `domainReplacements` 默认不设置，不会替换任何域名。需要时在本机配置里按数组顺序写自己的主机名及子域名；省略该字段或设为空数组 `[]` 都表示关闭。上面完整示例里的 `contoso.com` 只说明字段写法，不是内置规则。匹配遵循完整域名标签边界，因此 `contoso.com.cn` 不会被当成 `contoso.com` 替换。对于邮箱地址，只替换 `@` 后面的域名部分并保留用户名，例如 `alice@contoso.com` 会变成 `alice@lumen.com`，而不会变成 `EMAIL` 占位符。
 - **本机工具完整还原。** `restoreToolInput` 默认开启。未命中 `restoreDenyTools` 的本机工具在执行前，输入参数中的 `vault` 占位符和被替换的域名都会完整还原为真实值。
 - **外部联网工具边界。** `restoreDenyTools` 默认包含 `WebFetch`、`WebSearch`、`web_search` 和 `web_fetch`。为了保证外部请求可用，这些工具在执行前只还原 `domainReplacements` 中配置的真实域名，而不还原 `vault` 中的密钥和个人信息占位符。这意味着真实域名会随请求发送给外部工具服务，但密钥和个人信息不会。
 - **提示词阶段的域名限制。** Claude Code 和 Codex CLI 的 `UserPromptSubmit` 接口不支持改写提示词。如果提示词只命中了 `domainReplacements` 中的域名，提示词会按原文放行。如果提示词同时包含域名和其他敏感项，则按其他敏感项的 `prompt` 策略拦截或告警。

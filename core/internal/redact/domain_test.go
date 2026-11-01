@@ -6,13 +6,13 @@ import (
 	"testing"
 )
 
-// testDomains are the organisation's hosts, as keepquiet's default config
-// has them. All values are fake test fixtures.
+// testDomains are fictional fixtures only. They stand in for hosts a user
+// might set locally; they are not keepquiet's default.
 var testDomains = []DomainReplacement{
-	{From: "antgroup-inc.cn", To: "Xgroup-inc.cn"},
-	{From: "alipay.com", To: "Xpay.com"},
-	{From: "antfin.com", To: "Xfin.com"},
-	{From: "alibaba-inc.com", To: "Xbb-inc.com"},
+	{From: "northwind.cn", To: "harbor.cn"},
+	{From: "contoso.com", To: "lumen.com"},
+	{From: "fabrikam.net", To: "cedar.net"},
+	{From: "adventure-works.io", To: "ridge-works.io"},
 }
 
 func TestDomainReplacements(t *testing.T) {
@@ -20,21 +20,21 @@ func TestDomainReplacements(t *testing.T) {
 		in, want string
 		n        int
 	}{
-		{"antgroup-inc.cn", "Xgroup-inc.cn", 1},
-		{"alipay.com", "Xpay.com", 1},
-		{"antfin.com", "Xfin.com", 1},
-		{"alibaba-inc.com", "Xbb-inc.com", 1},
-		{"ALIPAY.COM", "Xpay.com", 1},
-		{"api.alipay.com", "api.Xpay.com", 1},
-		{"https://alipay.com/login?next=https://antfin.com/x", "https://Xpay.com/login?next=https://Xfin.com/x", 2},
-		{"alice@alipay.com", "alice@Xpay.com", 1},
-		{"alipay.com.", "Xpay.com.", 1},
+		{"northwind.cn", "harbor.cn", 1},
+		{"contoso.com", "lumen.com", 1},
+		{"fabrikam.net", "cedar.net", 1},
+		{"adventure-works.io", "ridge-works.io", 1},
+		{"CONTOSO.COM", "lumen.com", 1},
+		{"api.contoso.com", "api.lumen.com", 1},
+		{"https://contoso.com/login?next=https://fabrikam.net/x", "https://lumen.com/login?next=https://cedar.net/x", 2},
+		{"alice@contoso.com", "alice@lumen.com", 1},
+		{"contoso.com.", "lumen.com.", 1},
 		// whole labels only: a longer domain or a word that has one in it
 		// stays
-		{"alipay.com.cn", "alipay.com.cn", 0},
-		{"myalipay.com", "myalipay.com", 0},
-		{"api.antfin.com.example", "api.antfin.com.example", 0},
-		{"notalibaba-inc.comx", "notalibaba-inc.comx", 0},
+		{"contoso.com.cn", "contoso.com.cn", 0},
+		{"mycontoso.com", "mycontoso.com", 0},
+		{"api.fabrikam.net.example", "api.fabrikam.net.example", 0},
+		{"notadventure-works.iox", "notadventure-works.iox", 0},
 	}
 	for _, c := range cases {
 		out, n := Mask(c.in, Options{DomainReplacements: testDomains})
@@ -45,12 +45,12 @@ func TestDomainReplacements(t *testing.T) {
 }
 
 func TestDomainReplacementKeepsEmailLocalPart(t *testing.T) {
-	in := "alice@alipay.com and bob@gmail.com"
+	in := "alice@contoso.com and bob@gmail.com"
 	out, n := Mask(in, Options{Personal: true, DomainReplacements: testDomains})
-	if n != 2 || !strings.Contains(out, "alice@Xpay.com") {
-		t.Fatalf("Mask(%q) = %q, %d; want alice@Xpay.com and one masked address", in, out, n)
+	if n != 2 || !strings.Contains(out, "alice@lumen.com") {
+		t.Fatalf("Mask(%q) = %q, %d; want alice@lumen.com and one masked address", in, out, n)
 	}
-	if strings.Contains(out, "alice@{{") || strings.Contains(out, "alice@alipay.com") {
+	if strings.Contains(out, "alice@{{") || strings.Contains(out, "alice@contoso.com") {
 		t.Fatalf("email local-part was masked: %q", out)
 	}
 	if strings.Contains(out, "bob@gmail.com") || !strings.Contains(out, "{{EMAIL_") {
@@ -59,8 +59,8 @@ func TestDomainReplacementKeepsEmailLocalPart(t *testing.T) {
 	if back := RestoreDomains(out, false, testDomains); back != in {
 		t.Fatalf("RestoreDomains(%q) = %q, want %q", out, back, in)
 	}
-	if out, n := Mask("ALICE@ALIPAY.COM", Options{Personal: true, DomainReplacements: testDomains}); out != "ALICE@Xpay.com" || n != 1 {
-		t.Fatalf("uppercase address = %q, %d; want ALICE@Xpay.com", out, n)
+	if out, n := Mask("ALICE@CONTOSO.COM", Options{Personal: true, DomainReplacements: testDomains}); out != "ALICE@lumen.com" || n != 1 {
+		t.Fatalf("uppercase address = %q, %d; want ALICE@lumen.com", out, n)
 	}
 
 	// The existing false-positive protections stay: a git user, a file's
@@ -72,41 +72,41 @@ func TestDomainReplacementKeepsEmailLocalPart(t *testing.T) {
 }
 
 func TestDomainReplacementWinsKnownEmail(t *testing.T) {
-	const addr = "alice@alipay.com"
+	const addr = "alice@contoso.com"
 	// Make the whole address known the way a vault from before this
 	// replacement would have it.
 	if out, _ := Mask(addr, Options{Personal: true, Secrets: true}); !strings.Contains(out, "{{EMAIL_") {
 		t.Fatalf("fixture was not a known email: %q", out)
 	}
 	out, n := Mask(addr, Options{Personal: true, DomainReplacements: testDomains})
-	if out != "alice@Xpay.com" || n != 1 {
-		t.Fatalf("known email = %q, %d; want alice@Xpay.com", out, n)
+	if out != "alice@lumen.com" || n != 1 {
+		t.Fatalf("known email = %q, %d; want alice@lumen.com", out, n)
 	}
 }
 
 func TestReverseDomains(t *testing.T) {
-	const in = "alice@Xpay.com api.Xpay.com Xpay.com.cn myXpay.com"
-	const want = "alice@alipay.com api.alipay.com Xpay.com.cn myXpay.com"
+	const in = "alice@lumen.com api.lumen.com lumen.com.cn mylumen.com"
+	const want = "alice@contoso.com api.contoso.com lumen.com.cn mylumen.com"
 	if got := ReverseDomains(in, testDomains); got != want {
 		t.Fatalf("ReverseDomains(%q) = %q, want %q", in, got, want)
 	}
 }
 
 func TestMaskJSONDomainReplacementAndSigned(t *testing.T) {
-	body := `{"model":"fake","messages":[{"role":"user","content":[{"type":"text","text":"write alice@alipay.com\nvisit https://api.alipay.com/x and antfin.com"}]}],` +
-		`"thinking":{"type":"thinking","thinking":"alipay.com","signature":"SIG-alipay.com"},` +
-		`"opaque":{"signature":"SIG-alipay.com"},"url":"https://antgroup-inc.cn/a","meta":"alibaba-inc.com"}`
+	body := `{"model":"fake","messages":[{"role":"user","content":[{"type":"text","text":"write alice@contoso.com\nvisit https://api.contoso.com/x and fabrikam.net"}]}],` +
+		`"thinking":{"type":"thinking","thinking":"contoso.com","signature":"SIG-contoso.com"},` +
+		`"opaque":{"signature":"SIG-contoso.com"},"url":"https://northwind.cn/a","meta":"adventure-works.io"}`
 	out, n := MaskJSON([]byte(body), Options{Personal: true, DomainReplacements: testDomains})
 	if !json.Valid(out) {
 		t.Fatalf("not JSON: %s", out)
 	}
 	s := string(out)
-	for _, want := range []string{"alice@Xpay.com", `\nvisit`, "https://api.Xpay.com/x", "Xfin.com", "https://Xgroup-inc.cn/a", "Xbb-inc.com"} {
+	for _, want := range []string{"alice@lumen.com", `\nvisit`, "https://api.lumen.com/x", "cedar.net", "https://harbor.cn/a", "ridge-works.io"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("%q not in %s", want, s)
 		}
 	}
-	for _, gone := range []string{"alice@alipay.com", "api.alipay.com", "https://antgroup-inc.cn/a", `"meta":"alibaba-inc.com"`} {
+	for _, gone := range []string{"alice@contoso.com", "api.contoso.com", "https://northwind.cn/a", `"meta":"adventure-works.io"`} {
 		if strings.Contains(s, gone) {
 			t.Errorf("%q still in %s", gone, s)
 		}
@@ -114,8 +114,8 @@ func TestMaskJSONDomainReplacementAndSigned(t *testing.T) {
 	// A sealed block is checked against its signature and goes byte for
 	// byte, replacement host or not.
 	for _, signed := range []string{
-		`"thinking":{"type":"thinking","thinking":"alipay.com","signature":"SIG-alipay.com"}`,
-		`"opaque":{"signature":"SIG-alipay.com"}`,
+		`"thinking":{"type":"thinking","thinking":"contoso.com","signature":"SIG-contoso.com"}`,
+		`"opaque":{"signature":"SIG-contoso.com"}`,
 	} {
 		if !strings.Contains(s, signed) || n == 0 {
 			t.Fatalf("signed block changed or nothing masked (%d): %s", n, s)

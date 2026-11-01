@@ -34,9 +34,9 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-// DomainReplacement sends a host as another one on the way out: alipay.com
-// in text, a URL or an email's domain goes as Xpay.com. Matching is by
-// whole host labels, in any case; a longer host (alipay.com.cn) is left as
+// DomainReplacement sends a host as another one on the way out: contoso.com
+// in text, a URL or an email's domain goes as lumen.com. Matching is by
+// whole host labels, in any case; a longer host (contoso.com.cn) is left as
 // it is.
 type DomainReplacement struct {
 	From string `json:"from"`
@@ -73,7 +73,7 @@ type Options struct {
 	// DomainReplacements are host names a vendor must not see as they are.
 	// Each is swapped in text, URLs, subdomains and email domains, and put
 	// back by RestoreDomains on the agent's side. An email keeps its
-	// local-part: alice@alipay.com goes as alice@Xpay.com, never as an
+	// local-part: alice@contoso.com goes as alice@lumen.com, never as an
 	// EMAIL placeholder, or the part before @ would be gone too.
 	DomainReplacements []DomainReplacement
 
@@ -834,7 +834,7 @@ func mask(raw string, o Options, put func(kind, v string) string, escaped bool) 
 			}
 			if r.takes(s, a, b, ok) {
 				// The domain of one of these addresses is what goes, not
-				// the address: alice@alipay.com is alice@Xpay.com, not
+				// the address: alice@contoso.com is alice@lumen.com, not
 				// {{EMAIL_…}}. The span of the domain is in found already.
 				if r.kind == "EMAIL" && o.replacesEmailDomain(s[a:b]) {
 					continue
@@ -1143,7 +1143,7 @@ func lowerASCII(s string) string {
 
 // domainSpans finds each configured host in s where it is a host of its
 // own: after @, /, a dot of a subdomain, or a quote, and not followed by a
-// label (alipay.com.cn) or a host character (myalipay.com). reverse finds
+// label (contoso.com.cn) or a host character (mycontoso.com). reverse finds
 // the replacement host instead, to put the real one back on the agent's
 // side.
 func domainSpans(s string, domains []DomainReplacement, reverse bool) []span {
@@ -1183,9 +1183,9 @@ func domainSpans(s string, domains []DomainReplacement, reverse bool) []span {
 
 // domainBounds says s[a:b] is a whole host or a subdomain's suffix, not a
 // piece of a longer word or of a longer domain. A dot before it starts a
-// subdomain (api.alipay.com); a dot after it starts another label
-// (alipay.com.cn), and a host character on either side makes it a longer
-// name (myalipay.com).
+// subdomain (api.contoso.com); a dot after it starts another label
+// (contoso.com.cn), and a host character on either side makes it a longer
+// name (mycontoso.com).
 func domainBounds(s string, a, b int) bool {
 	hostByte := func(c byte) bool {
 		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_'
@@ -1208,7 +1208,7 @@ func domainBounds(s string, a, b int) bool {
 // replacesEmailDomain says v is an address whose host is one these domains
 // cover, as it is or as it goes out: its local-part stays and only the
 // domain is replaced. Masking the whole address would hide the local-part
-// and leave an EMAIL placeholder where alice@Xpay.com belongs.
+// and leave an EMAIL placeholder where alice@lumen.com belongs.
 func (o Options) replacesEmailDomain(v string) bool {
 	at := strings.LastIndexByte(v, '@')
 	if at < 0 || at+1 == len(v) {
@@ -1380,7 +1380,7 @@ var placeholderBody = regexp.MustCompile(`[A-Za-z][A-Za-z0-9_]*_[A-Za-z2-7]{8}`)
 func Restore(s string, escaped bool) string { return restore(s, escaped, nil, nil) }
 
 // RestoreDomains is Restore with the replaced hosts in domains put back:
-// alice@Xpay.com reads alice@alipay.com again locally, where the vendor
+// alice@lumen.com reads alice@contoso.com again locally, where the vendor
 // only ever saw the replacement.
 func RestoreDomains(s string, escaped bool, domains []DomainReplacement) string {
 	return restore(s, escaped, nil, domains)
